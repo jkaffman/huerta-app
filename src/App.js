@@ -67,6 +67,8 @@ export default function HuertaApp() {
   const [hoveredTask,    setHoveredTask]    = useState(null);
   const [year,           setYear]           = useState(new Date().getFullYear());
   const [newTask, setNewTask] = useState({ cultivoId:"", tipo:"sembrar", label:"Sembrar", fecha:"", comentario:"", nombreCustom:"" });
+  const [recurrente,    setRecurrente]    = useState(null); // null=sin respuesta, false=no, true=si
+  const [fechasExtra,   setFechasExtra]   = useState([""]);  // fechas adicionales si es recurrente
   const [newCult, setNewCult] = useState({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
 
   // ── Cargar datos de Firebase ──
@@ -127,11 +129,21 @@ export default function HuertaApp() {
         tipoFinal = ref.id;
       }
     }
-    await addDoc(collection(db,"tareas"), {
-      cultivoId:newTask.cultivoId, tipo:tipoFinal,
-      label:labelFinal, fecha:newTask.fecha, comentario:newTask.comentario,
-    });
+    // Guardar fecha principal
+    const todasLasFechas = [newTask.fecha];
+    // Si es recurrente, agregar fechas extra válidas
+    if (recurrente === true) {
+      fechasExtra.forEach(f => { if (f) todasLasFechas.push(f); });
+    }
+    for (const fecha of todasLasFechas) {
+      await addDoc(collection(db,"tareas"), {
+        cultivoId:newTask.cultivoId, tipo:tipoFinal,
+        label:labelFinal, fecha, comentario:newTask.comentario,
+      });
+    }
     setNewTask({ cultivoId:"", tipo:"sembrar", label:"Sembrar", fecha:"", comentario:"", nombreCustom:"" });
+    setRecurrente(null);
+    setFechasExtra([""]);
     setShowAddTask(false);
   }
   async function saveTarea() {
@@ -539,48 +551,170 @@ export default function HuertaApp() {
         </Modal>
       )}
 
-      {showAddTask&&(
-        <Modal title="🌱  Nueva Tarea" onClose={()=>setShowAddTask(false)}>
-          <Campo label="Cultivo">
-            <select value={newTask.cultivoId}
-              onChange={e=>setNewTask({...newTask,cultivoId:e.target.value})} style={sel}>
-              <option value="">— Selecciona un cultivo —</option>
-              {cultivos.map(c=><option key={c.id} value={c.id}>{c.nombre} ({c.año})</option>)}
-            </select>
-          </Campo>
-          <Campo label="Tipo de tarea">
-            <select value={newTask.tipo} onChange={e=>handleTipoChange(e.target.value)} style={sel}>
-              {todosLosTipos.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-              <option value="otro">➕ Otra tarea (nueva)...</option>
-            </select>
-          </Campo>
-          {newTask.tipo==="otro"&&(
-            <Campo label="Nombre de la nueva tarea">
-              <input value={newTask.nombreCustom}
-                onChange={e=>setNewTask({...newTask,nombreCustom:e.target.value})}
-                style={{...inp,borderColor:"#92660a",borderWidth:2}}
-                placeholder="Ej: Preparar compost, Instalar riego..." />
-              <span style={{ fontSize:11, color:C.textSub, fontFamily:"Arial,sans-serif", marginTop:3 }}>
-                💡 Quedará guardada en tu lista para usarla de nuevo
-              </span>
+      {showAddTask&&(()=>{
+        const cultivoActual = cultivos.find(c=>c.id===newTask.cultivoId);
+        const tareasDelCultivo = newTask.cultivoId
+          ? tareas.filter(t=>t.cultivoId===newTask.cultivoId)
+              .sort((a,b)=>a.fecha>b.fecha?1:-1)
+          : [];
+        const tituloModal = cultivoActual
+          ? `🌱 Nueva Tarea · ${cultivoActual.nombre}`
+          : "🌱 Nueva Tarea";
+        return (
+          <Modal title={tituloModal} onClose={()=>{
+            setShowAddTask(false); setRecurrente(null); setFechasExtra([""]);
+          }}>
+            {/* Selector de cultivo */}
+            <Campo label="Cultivo">
+              <select value={newTask.cultivoId}
+                onChange={e=>{ setNewTask({...newTask,cultivoId:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={sel}>
+                <option value="">— Selecciona un cultivo —</option>
+                {cultivos.map(c=><option key={c.id} value={c.id}>{c.nombre} ({c.año})</option>)}
+              </select>
             </Campo>
-          )}
-          <Campo label="Fecha">
-            <input type="date" value={newTask.fecha}
-              onChange={e=>setNewTask({...newTask,fecha:e.target.value})} style={inp} />
-          </Campo>
-          <Campo label="Comentario (opcional)">
-            <textarea value={newTask.comentario}
-              onChange={e=>setNewTask({...newTask,comentario:e.target.value})}
-              style={{...inp,height:70,resize:"vertical"}}
-              placeholder="Notas sobre esta tarea..." />
-          </Campo>
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-            <button onClick={()=>setShowAddTask(false)} style={btnCancel}>Cancelar</button>
-            <button onClick={addTarea} style={btnPrimary}>Agregar Tarea</button>
-          </div>
-        </Modal>
-      )}
+
+            {/* Listado de tareas existentes del cultivo */}
+            {tareasDelCultivo.length>0&&(
+              <div style={{ marginBottom:14, background:"#f7f2e8",
+                border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px" }}>
+                <div style={{ fontSize:10, color:C.textMuted, fontWeight:"bold",
+                  letterSpacing:"1px", textTransform:"uppercase",
+                  fontFamily:"Arial,sans-serif", marginBottom:8 }}>
+                  Tareas ya programadas para este cultivo
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:130, overflowY:"auto" }}>
+                  {tareasDelCultivo.map(t=>{
+                    const info=getTipoInfo(t.tipo,t.label,tareasCustom);
+                    return (
+                      <div key={t.id} style={{ display:"flex", alignItems:"center",
+                        gap:8, fontSize:12, fontFamily:"Arial,sans-serif" }}>
+                        <div style={{ width:8, height:8, borderRadius:"50%",
+                          background:info.color, flexShrink:0 }} />
+                        <span style={{ color:info.color, fontWeight:"bold", minWidth:80 }}>
+                          {t.label||info.label}
+                        </span>
+                        <span style={{ color:C.textMuted }}>
+                          {t.fecha?.slice(8)}/{t.fecha?.slice(5,7)}/{t.fecha?.slice(0,4)}
+                        </span>
+                        {t.comentario&&<span style={{ color:C.textMuted, fontStyle:"italic",
+                          fontSize:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          — {t.comentario}
+                        </span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tipo de tarea */}
+            <Campo label="Tipo de tarea">
+              <select value={newTask.tipo} onChange={e=>handleTipoChange(e.target.value)} style={sel}>
+                {todosLosTipos.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+                <option value="otro">➕ Otra tarea (nueva)...</option>
+              </select>
+            </Campo>
+            {newTask.tipo==="otro"&&(
+              <Campo label="Nombre de la nueva tarea">
+                <input value={newTask.nombreCustom}
+                  onChange={e=>setNewTask({...newTask,nombreCustom:e.target.value})}
+                  style={{...inp,borderColor:"#92660a",borderWidth:2}}
+                  placeholder="Ej: Preparar compost, Instalar riego..." />
+                <span style={{ fontSize:11, color:C.textSub, fontFamily:"Arial,sans-serif", marginTop:3 }}>
+                  💡 Quedará guardada en tu lista para usarla de nuevo
+                </span>
+              </Campo>
+            )}
+
+            {/* Fecha principal */}
+            <Campo label="Fecha">
+              <input type="date" value={newTask.fecha}
+                onChange={e=>{ setNewTask({...newTask,fecha:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={inp} />
+            </Campo>
+
+            {/* Comentario */}
+            <Campo label="Comentario (opcional)">
+              <textarea value={newTask.comentario}
+                onChange={e=>setNewTask({...newTask,comentario:e.target.value})}
+                style={{...inp,height:60,resize:"vertical"}}
+                placeholder="Notas sobre esta tarea..." />
+            </Campo>
+
+            {/* Pregunta recurrente — solo aparece si hay fecha */}
+            {newTask.fecha&&(
+              <div style={{ background:"#f0ebe0", border:`1px solid ${C.border}`,
+                borderRadius:8, padding:"12px 14px", marginBottom:14 }}>
+                <div style={{ fontSize:13, color:C.textMain, fontWeight:"bold",
+                  fontFamily:"Georgia,serif", marginBottom:10 }}>
+                  ¿Es una tarea recurrente?
+                </div>
+                <div style={{ display:"flex", gap:8, marginBottom: recurrente===true ? 12 : 0 }}>
+                  {[["no",false,"No, solo esta vez"],["si",true,"Sí, se repite"]].map(([k,val,lbl])=>(
+                    <button key={k} onClick={()=>{ setRecurrente(val); if(!val) setFechasExtra([""]); }}
+                      style={{ flex:1, padding:"8px", borderRadius:6,
+                        border:`1.5px solid ${recurrente===val ? C.borderDark : C.border}`,
+                        background: recurrente===val ? "#3b2f1e" : "white",
+                        color: recurrente===val ? "#f5ead8" : C.textSub,
+                        cursor:"pointer", fontSize:12, fontWeight:"bold",
+                        fontFamily:"Arial,sans-serif" }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Fechas extra si es recurrente */}
+                {recurrente===true&&(
+                  <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
+                    <div style={{ fontSize:11, color:C.textMuted, fontFamily:"Arial,sans-serif" }}>
+                      Agrega las fechas en que se repite:
+                    </div>
+                    {fechasExtra.map((f,i)=>(
+                      <div key={i} style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <input type="date" value={f}
+                          onChange={e=>{
+                            const arr=[...fechasExtra];
+                            arr[i]=e.target.value;
+                            setFechasExtra(arr);
+                          }} style={{...inp, marginBottom:0, flex:1}} />
+                        {fechasExtra.length>1&&(
+                          <button onClick={()=>setFechasExtra(fechasExtra.filter((_,j)=>j!==i))}
+                            style={{ padding:"6px 10px", borderRadius:6,
+                              border:`1px solid #b91c1c33`, background:"#fee2e2",
+                              color:"#b91c1c", cursor:"pointer", fontSize:13 }}>✕</button>
+                        )}
+                      </div>
+                    ))}
+                    <button onClick={()=>setFechasExtra([...fechasExtra,""])}
+                      style={{ alignSelf:"flex-start", padding:"6px 16px",
+                        borderRadius:6, border:`1.5px dashed ${C.borderDark}`,
+                        background:"transparent", color:C.textSub,
+                        cursor:"pointer", fontSize:13, fontWeight:"bold",
+                        fontFamily:"Georgia,serif" }}>
+                      + Agregar otra fecha
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Botones finales */}
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <button onClick={()=>{ setShowAddTask(false); setRecurrente(null); setFechasExtra([""]); }}
+                style={btnCancel}>Cancelar</button>
+              <button onClick={addTarea}
+                disabled={!newTask.fecha || !newTask.cultivoId || recurrente===null}
+                style={{...btnPrimary,
+                  opacity:(!newTask.fecha||!newTask.cultivoId||recurrente===null)?0.45:1,
+                  cursor:(!newTask.fecha||!newTask.cultivoId||recurrente===null)?"not-allowed":"pointer"
+                }}>
+                Grabar Tarea{recurrente===true&&fechasExtra.filter(f=>f).length>0
+                  ? ` (${1+fechasExtra.filter(f=>f).length})`
+                  : ""}
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {showAddCultivo&&(
         <Modal title="🪴  Nuevo Cultivo" onClose={()=>setShowAddCultivo(false)}>
