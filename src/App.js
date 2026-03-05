@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { db } from "./firebase";
+import {
+  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc
+} from "firebase/firestore";
 
 const TAREAS_SISTEMA = [
   { id:"sembrar",     label:"Sembrar",      color:"#2d7a3a", light:"#e8f5e2", abrev:"SEM" },
@@ -9,23 +13,6 @@ const TAREAS_SISTEMA = [
   { id:"malezas",     label:"Malezas",      color:"#6b21a8", light:"#f3e8ff", abrev:"MAL" },
   { id:"podar",       label:"Podar",        color:"#c2410c", light:"#ffedd5", abrev:"POD" },
   { id:"cosechar",    label:"Cosechar",     color:"#b45309", light:"#fef3c7", abrev:"COS" },
-];
-
-const CULTIVOS_DEMO = [
-  { id:"1", nombre:"Tomates",    año:2026, ubicacion:"Cama Norte", activo:true  },
-  { id:"2", nombre:"Lechugas",   año:2026, ubicacion:"Macetero",   activo:true  },
-  { id:"3", nombre:"Zanahorias", año:2025, ubicacion:"Cama Sur",   activo:false },
-];
-const TAREAS_DEMO = [
-  { id:"t1", cultivoId:"1", tipo:"sembrar",     label:"Sembrar",      fecha:"2026-09-05", comentario:"Semillero cubierto" },
-  { id:"t2", cultivoId:"1", tipo:"trasplantar", label:"Trasplantar",  fecha:"2026-10-15", comentario:"" },
-  { id:"t3", cultivoId:"1", tipo:"fertilizar",  label:"Fertilizar",   fecha:"2026-11-10", comentario:"Revisar dosis" },
-  { id:"t4", cultivoId:"1", tipo:"cosechar",    label:"Cosechar",     fecha:"2026-12-20", comentario:"" },
-  { id:"t5", cultivoId:"2", tipo:"sembrar",     label:"Sembrar",      fecha:"2026-08-10", comentario:"" },
-  { id:"t6", cultivoId:"2", tipo:"regar",       label:"Regar",        fecha:"2026-09-01", comentario:"" },
-  { id:"t7", cultivoId:"2", tipo:"cosechar",    label:"Cosechar",     fecha:"2026-10-05", comentario:"Excelente cosecha" },
-  { id:"t8", cultivoId:"3", tipo:"sembrar",     label:"Sembrar",      fecha:"2025-03-01", comentario:"" },
-  { id:"t9", cultivoId:"3", tipo:"cosechar",    label:"Cosechar",     fecha:"2025-07-15", comentario:"" },
 ];
 
 const MONTHS   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -45,7 +32,6 @@ const C = {
   today:"#c2410c", accent:"#5c8a3c",
 };
 
-// Genera color y abrev para tareas personalizadas
 function colorParaPersonalizada(label) {
   const colores = [
     { color:"#065f46", light:"#d1fae5" },
@@ -55,39 +41,49 @@ function colorParaPersonalizada(label) {
     { color:"#134e4a", light:"#ccfbf1" },
     { color:"#3f3f46", light:"#f4f4f5" },
   ];
-  // Elegir color basado en el texto
   const idx = label.charCodeAt(0) % colores.length;
   return { ...colores[idx], abrev: label.slice(0,3).toUpperCase() };
 }
 
-function getTipoInfo(tipo, label, tareasPersonalizadas) {
+function getTipoInfo(tipo, label, tareasCustom) {
   const sistema = TAREAS_SISTEMA.find(t => t.id === tipo);
   if (sistema) return sistema;
-  // Buscar en personalizadas
-  const custom = tareasPersonalizadas.find(t => t.id === tipo);
+  const custom = tareasCustom.find(t => t.id === tipo);
   if (custom) return custom;
-  // Fallback
-  return { color:"#4b5563", light:"#f3f4f6", abrev: (label||"OTR").slice(0,3).toUpperCase() };
+  return { color:"#4b5563", light:"#f3f4f6", abrev:(label||"OTR").slice(0,3).toUpperCase() };
 }
 
 export default function HuertaApp() {
   const [view,           setView]           = useState("gantt");
-  const [cultivos,       setCultivos]       = useState(CULTIVOS_DEMO);
-  const [tareas,         setTareas]         = useState(TAREAS_DEMO);
-  // Tareas personalizadas creadas por el usuario
+  const [cultivos,       setCultivos]       = useState([]);
+  const [tareas,         setTareas]         = useState([]);
   const [tareasCustom,   setTareasCustom]   = useState([]);
+  const [loading,        setLoading]        = useState(true);
   const [ganttMode,      setGanttMode]      = useState("activos");
+  const [libroMode,      setLibroMode]      = useState("activos");
   const [showAddTask,    setShowAddTask]    = useState(false);
   const [showAddCultivo, setShowAddCultivo] = useState(false);
   const [editTask,       setEditTask]       = useState(null);
   const [hoveredTask,    setHoveredTask]    = useState(null);
   const [year,           setYear]           = useState(new Date().getFullYear());
-
-  // Estado formulario nueva tarea
   const [newTask, setNewTask] = useState({ cultivoId:"", tipo:"sembrar", label:"Sembrar", fecha:"", comentario:"", nombreCustom:"" });
   const [newCult, setNewCult] = useState({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
 
-  // Lista completa de tipos (sistema + personalizados)
+  // ── Cargar datos de Firebase ──
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db,"cultivos"), s => {
+      setCultivos(s.docs.map(d => ({ id:d.id, ...d.data() })));
+      setLoading(false);
+    });
+    const u2 = onSnapshot(collection(db,"tareas"), s => {
+      setTareas(s.docs.map(d => ({ id:d.id, ...d.data() })));
+    });
+    const u3 = onSnapshot(collection(db,"tiposCustom"), s => {
+      setTareasCustom(s.docs.map(d => ({ id:d.id, ...d.data() })));
+    });
+    return () => { u1(); u2(); u3(); };
+  }, []);
+
   const todosLosTipos = [...TAREAS_SISTEMA, ...tareasCustom];
 
   function handleTipoChange(tipo) {
@@ -95,83 +91,89 @@ export default function HuertaApp() {
       setNewTask(t => ({ ...t, tipo:"otro", label:"", nombreCustom:"" }));
     } else {
       const info = todosLosTipos.find(t => t.id === tipo);
-      setNewTask(t => ({ ...t, tipo, label: info?.label || tipo, nombreCustom:"" }));
+      setNewTask(t => ({ ...t, tipo, label:info?.label||tipo, nombreCustom:"" }));
     }
   }
 
-  function addCultivo() {
+  async function addCultivo() {
     if (!newCult.nombre) return;
-    setCultivos([...cultivos, { ...newCult, id:Date.now().toString(), año:Number(newCult.año) }]);
+    await addDoc(collection(db,"cultivos"), { ...newCult, año:Number(newCult.año) });
     setNewCult({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
     setShowAddCultivo(false);
   }
-  function toggleActivo(id) {
-    setCultivos(cultivos.map(c => c.id===id ? {...c, activo:!c.activo} : c));
+  async function toggleActivo(id, actual) {
+    await updateDoc(doc(db,"cultivos",id), { activo:!actual });
   }
-
-  function addTarea() {
+  async function deleteCultivo(id) {
+    if (!window.confirm("¿Eliminar este cultivo y todas sus tareas?")) return;
+    await deleteDoc(doc(db,"cultivos",id));
+    const tareasDelCultivo = tareas.filter(t=>t.cultivoId===id);
+    for (const t of tareasDelCultivo) await deleteDoc(doc(db,"tareas",t.id));
+  }
+  async function addTarea() {
     if (!newTask.cultivoId || !newTask.fecha) return;
     let tipoFinal = newTask.tipo;
     let labelFinal = newTask.label;
-
     if (newTask.tipo === "otro") {
       const nombre = newTask.nombreCustom.trim();
       if (!nombre) return;
       labelFinal = nombre;
-      // Ver si ya existe esta tarea personalizada
-      const yaExiste = tareasCustom.find(t => t.label.toLowerCase() === nombre.toLowerCase());
+      const yaExiste = tareasCustom.find(t => t.label.toLowerCase()===nombre.toLowerCase());
       if (yaExiste) {
         tipoFinal = yaExiste.id;
       } else {
-        // Crear nuevo tipo personalizado y guardarlo en la lista
-        const nuevoId = "custom_" + Date.now();
         const { color, light, abrev } = colorParaPersonalizada(nombre);
-        const nuevoTipo = { id:nuevoId, label:nombre, color, light, abrev };
-        setTareasCustom(prev => [...prev, nuevoTipo]);
-        tipoFinal = nuevoId;
+        const ref = await addDoc(collection(db,"tiposCustom"), { label:nombre, color, light, abrev });
+        tipoFinal = ref.id;
       }
     }
-
-    setTareas([...tareas, {
-      id: Date.now().toString(),
-      cultivoId: newTask.cultivoId,
-      tipo: tipoFinal,
-      label: labelFinal,
-      fecha: newTask.fecha,
-      comentario: newTask.comentario,
-    }]);
+    await addDoc(collection(db,"tareas"), {
+      cultivoId:newTask.cultivoId, tipo:tipoFinal,
+      label:labelFinal, fecha:newTask.fecha, comentario:newTask.comentario,
+    });
     setNewTask({ cultivoId:"", tipo:"sembrar", label:"Sembrar", fecha:"", comentario:"", nombreCustom:"" });
     setShowAddTask(false);
   }
-
-  function saveTarea() {
-    setTareas(tareas.map(t => t.id===editTask.id ? editTask : t));
+  async function saveTarea() {
+    const { id, ...data } = editTask;
+    await updateDoc(doc(db,"tareas",id), data);
     setEditTask(null);
   }
-  function deleteTarea(id) {
-    setTareas(tareas.filter(t => t.id!==id));
+  async function deleteTarea(id) {
+    await deleteDoc(doc(db,"tareas",id));
     setEditTask(null);
   }
 
   const cultivosFiltrados = ganttMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos;
+  const cultivosLibro = libroMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos;
 
-  function monthX(i) { return LABEL_W + i * COL_W; }
+  function monthX(i) { return LABEL_W + i*COL_W; }
   function taskX(fecha) {
     const d = new Date(fecha+"T12:00:00");
     const m = d.getMonth(), day = d.getDate();
-    const days = new Date(d.getFullYear(), m+1, 0).getDate();
-    return monthX(m) + (day/days)*COL_W;
+    const days = new Date(d.getFullYear(),m+1,0).getDate();
+    return monthX(m)+(day/days)*COL_W;
   }
   function tareasDe(cId) {
-    return tareas.filter(t => t.cultivoId===cId && t.fecha?.startsWith(String(year)));
+    return tareas.filter(t=>t.cultivoId===cId && t.fecha?.startsWith(String(year)));
   }
 
-  const svgW = LABEL_W + COL_W*12 + 2;
-  const svgH = HEADER_H + ROW_H*Math.max(1, cultivosFiltrados.length) + 2;
+  const svgW = LABEL_W+COL_W*12+2;
+  const svgH = HEADER_H+ROW_H*Math.max(1,cultivosFiltrados.length)+2;
   const todayX = (() => {
     const t = new Date();
     return t.getFullYear()===year ? taskX(t.toISOString().slice(0,10)) : null;
   })();
+
+  if (loading) return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex",
+      alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
+      <div style={{ fontSize:48 }}>🌱</div>
+      <div style={{ fontSize:16, color:C.textSub, fontFamily:"Georgia,serif" }}>
+        Cargando tu huerta...
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg,
@@ -194,12 +196,12 @@ export default function HuertaApp() {
           </div>
         </div>
         <nav style={{ display:"flex", gap:8 }}>
-          {[["gantt","📊 Gantt"],["libro","📖 Cultivos"]].map(([v,lbl]) => (
+          {[["gantt","📊 Gantt"],["libro","📖 Cultivos"]].map(([v,lbl])=>(
             <button key={v} onClick={()=>setView(v)} style={{
               padding:"8px 22px", borderRadius:6,
-              border: view===v ? "none" : `1px solid ${C.borderDark}`,
-              background: view===v ? "#c8a96e" : "transparent",
-              color: view===v ? C.bgHeader : C.textHead,
+              border:view===v?"none":`1px solid ${C.borderDark}`,
+              background:view===v?"#c8a96e":"transparent",
+              color:view===v?C.bgHeader:C.textHead,
               cursor:"pointer", fontSize:13, fontWeight:"bold",
               fontFamily:"Georgia,serif",
             }}>{lbl}</button>
@@ -212,15 +214,13 @@ export default function HuertaApp() {
         {/* ════ GANTT ════ */}
         {view==="gantt" && (
           <div>
-            {/* Controles */}
             <div style={{ display:"flex", alignItems:"center",
               justifyContent:"space-between", marginBottom:16,
               flexWrap:"wrap", gap:10 }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:2,
                   background:C.bgCard, border:`1px solid ${C.border}`,
-                  borderRadius:6, padding:"4px 10px",
-                  boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
+                  borderRadius:6, padding:"4px 10px" }}>
                   <button onClick={()=>setYear(y=>y-1)} style={btnNav}>◀</button>
                   <span style={{ fontSize:20, fontWeight:"bold", color:C.textMain,
                     minWidth:56, textAlign:"center" }}>{year}</span>
@@ -231,10 +231,10 @@ export default function HuertaApp() {
                   {["activos","todos"].map(m=>(
                     <button key={m} onClick={()=>setGanttMode(m)} style={{
                       padding:"7px 16px", border:"none",
-                      background: ganttMode===m ? "#3b2f1e" : "transparent",
-                      color: ganttMode===m ? "#f5ead8" : C.textSub,
+                      background:ganttMode===m?"#3b2f1e":"transparent",
+                      color:ganttMode===m?"#f5ead8":C.textSub,
                       cursor:"pointer", fontSize:12,
-                      fontWeight: ganttMode===m ? "bold" : "normal",
+                      fontWeight:ganttMode===m?"bold":"normal",
                       fontFamily:"Georgia,serif",
                     }}>{m==="activos"?"Solo activos":"Todos"}</button>
                   ))}
@@ -247,20 +247,19 @@ export default function HuertaApp() {
 
             {/* Leyenda */}
             <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:16 }}>
-              {todosLosTipos.map(t => (
+              {todosLosTipos.map(t=>(
                 <div key={t.id} style={{
                   display:"flex", alignItems:"center", gap:5,
                   background:t.light, border:`1px solid ${t.color}55`,
                   borderRadius:20, padding:"3px 10px" }}>
-                  <div style={{ width:8, height:8, borderRadius:"50%",
-                    background:t.color }} />
+                  <div style={{ width:8, height:8, borderRadius:"50%", background:t.color }} />
                   <span style={{ fontSize:11, color:t.color,
                     fontWeight:"bold", fontFamily:"Arial,sans-serif" }}>{t.label}</span>
                 </div>
               ))}
             </div>
 
-            {/* SVG GANTT */}
+            {/* SVG Gantt */}
             <div style={{ borderRadius:8, border:`2px solid ${C.borderDark}`,
               overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.12)",
               overflowX:"auto", background:C.bgGantt }}>
@@ -268,7 +267,7 @@ export default function HuertaApp() {
                 <rect width={svgW} height={svgH} fill={C.bgGantt} />
                 {MONTHS.map((_,i)=>(
                   <rect key={i} x={monthX(i)} y={0} width={COL_W} height={svgH}
-                    fill={i%2===0 ? C.bgRow1 : "#f2ede3"} />
+                    fill={i%2===0?C.bgRow1:"#f2ede3"} />
                 ))}
                 <rect x={0} y={0} width={LABEL_W} height={svgH} fill={C.bgLabel1} />
                 <line x1={LABEL_W-.5} y1={0} x2={LABEL_W-.5} y2={svgH}
@@ -283,27 +282,27 @@ export default function HuertaApp() {
                       stroke={C.border} strokeWidth={1} />
                     <text x={monthX(i)+COL_W/2} y={HEADER_H/2+6}
                       textAnchor="middle" fill={C.monthText}
-                      fontSize={13} fontWeight="bold"
-                      fontFamily="Georgia,serif">{m}</text>
+                      fontSize={13} fontWeight="bold" fontFamily="Georgia,serif">{m}</text>
                   </g>
                 ))}
                 <line x1={monthX(12)} y1={0} x2={monthX(12)} y2={svgH}
                   stroke={C.border} strokeWidth={1} />
 
-                {cultivosFiltrados.map((c, rowIdx)=>{
-                  const y0 = HEADER_H + rowIdx*ROW_H;
-                  const isEven = rowIdx%2===0;
+                {cultivosFiltrados.map((c,rowIdx)=>{
+                  const y0=HEADER_H+rowIdx*ROW_H;
+                  const isEven=rowIdx%2===0;
                   return (
                     <g key={c.id}>
                       <rect x={LABEL_W} y={y0} width={svgW-LABEL_W} height={ROW_H}
-                        fill={isEven ? C.bgRow1 : C.bgRow2} />
+                        fill={isEven?C.bgRow1:C.bgRow2} />
                       <rect x={0} y={y0} width={LABEL_W} height={ROW_H}
-                        fill={isEven ? C.bgLabel1 : C.bgLabel2} />
+                        fill={isEven?C.bgLabel1:C.bgLabel2} />
                       <line x1={0} y1={y0+ROW_H} x2={svgW} y2={y0+ROW_H}
                         stroke={C.border} strokeWidth={1} />
                       <rect x={0} y={y0+8} width={4} height={ROW_H-16} rx={2}
-                        fill={c.activo ? C.accent : C.textMuted} />
-                      <text x={14} y={y0+ROW_H/2-4} fill={c.activo?C.textMain:C.textMuted}
+                        fill={c.activo?C.accent:C.textMuted} />
+                      <text x={14} y={y0+ROW_H/2-4}
+                        fill={c.activo?C.textMain:C.textMuted}
                         fontSize={14} fontWeight="bold" fontFamily="Georgia,serif"
                         fontStyle={c.activo?"normal":"italic"}>{c.nombre}</text>
                       <text x={14} y={y0+ROW_H/2+13} fill={C.textSub}
@@ -313,98 +312,66 @@ export default function HuertaApp() {
                       </text>
 
                       {tareasDe(c.id).map(tarea=>{
-                        const info = getTipoInfo(tarea.tipo, tarea.label, tareasCustom);
-                        const tx = taskX(tarea.fecha);
-                        const cy = y0+ROW_H/2;
-                        const isHov = hoveredTask===tarea.id;
-                        const abrev = info.abrev || (tarea.label||"").slice(0,3).toUpperCase();
+                        const info=getTipoInfo(tarea.tipo,tarea.label,tareasCustom);
+                        const tx=taskX(tarea.fecha);
+                        const cy=y0+ROW_H/2;
+                        const isHov=hoveredTask===tarea.id;
+                        const abrev=info.abrev||(tarea.label||"").slice(0,3).toUpperCase();
                         return (
                           <g key={tarea.id} style={{ cursor:"pointer" }}
                             onMouseEnter={()=>setHoveredTask(tarea.id)}
                             onMouseLeave={()=>setHoveredTask(null)}
                             onClick={()=>setEditTask({...tarea})}>
-                            {/* Sombra */}
                             <circle cx={tx+1} cy={cy+2} r={TASK_R}
                               fill="rgba(0,0,0,0.13)" />
-                            {/* Círculo */}
                             <circle cx={tx} cy={cy} r={isHov?TASK_R+2:TASK_R}
                               fill={info.light} stroke={info.color}
                               strokeWidth={isHov?3:2} />
-                            {/* Abreviatura en negrita */}
                             <text x={tx} y={cy+5} textAnchor="middle"
                               fontSize={10} fontWeight="bold"
                               fontFamily="Arial,sans-serif"
                               fill={info.color}>{abrev}</text>
-                            {/* Punto naranja = comentario */}
-                            {tarea.comentario && (
+                            {tarea.comentario&&(
                               <circle cx={tx+13} cy={cy-13} r={5}
                                 fill="#e67e22" stroke="white" strokeWidth={1.5} />
                             )}
-                            {/* Tooltip nube en Gantt */}
-                            {isHov && (()=>{
-                              const tipW = 200;
-                              const tipH = 58;
-                              const tipX = Math.min(Math.max(tx-tipW/2, LABEL_W+4), svgW-tipW-6);
-                              const tipY = Math.max(6, cy-TASK_R-tipH-14);
-                              // Cola de la nube (triángulo apuntando abajo)
-                              const tailX = Math.min(Math.max(tx, tipX+20), tipX+tipW-20);
+                            {/* Nube tooltip Gantt */}
+                            {isHov&&(()=>{
+                              const tipW=200, tipH=58;
+                              const tipX=Math.min(Math.max(tx-tipW/2,LABEL_W+4),svgW-tipW-6);
+                              const tipY=Math.max(6,cy-TASK_R-tipH-14);
+                              const tailX=Math.min(Math.max(tx,tipX+20),tipX+tipW-20);
                               return (
                                 <g style={{ pointerEvents:"none" }}>
-                                  {/* Sombra */}
                                   <rect x={tipX+3} y={tipY+3} width={tipW} height={tipH}
                                     rx={14} fill="rgba(0,0,0,0.12)" />
-                                  {/* Cuerpo nube */}
                                   <rect x={tipX} y={tipY} width={tipW} height={tipH}
                                     rx={14} fill="#fffdf7"
                                     stroke={info.color} strokeWidth={1.5} />
-                                  {/* Bolitas decorativas nube arriba */}
-                                  <circle cx={tipX+22} cy={tipY} r={9}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+44} cy={tipY-6} r={11}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+68} cy={tipY-9} r={12}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+94} cy={tipY-7} r={11}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+118} cy={tipY-4} r={10}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  {/* Cubrir borde superior del rect con el color de fondo */}
-                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16}
-                                    fill="#fffdf7" />
-                                  {/* Cola hacia la tarea */}
-                                  <polygon
-                                    points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5}
-                                    strokeLinejoin="round" />
-                                  {/* Cubrir base del rect sobre la cola */}
-                                  <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5}
-                                    fill="#fffdf7" />
-                                  {/* Franja color arriba */}
-                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8}
-                                    rx={13} fill={info.color} opacity={0.15} />
-                                  {/* Texto: nombre tarea */}
-                                  <text x={tipX+12} y={tipY+20}
-                                    fill={info.color} fontSize={11} fontWeight="bold"
-                                    fontFamily="Georgia,serif">
-                                    {tarea.label || info.label}
+                                  <circle cx={tipX+22} cy={tipY} r={9} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+44} cy={tipY-6} r={11} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+68} cy={tipY-9} r={12} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+94} cy={tipY-7} r={11} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+118} cy={tipY-4} r={10} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
+                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#fffdf7" />
+                                  <polygon points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`}
+                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round" />
+                                  <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#fffdf7" />
+                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8} rx={13} fill={info.color} opacity={0.15} />
+                                  <text x={tipX+12} y={tipY+20} fill={info.color} fontSize={11} fontWeight="bold" fontFamily="Georgia,serif">
+                                    {tarea.label||info.label}
                                   </text>
-                                  {/* Texto: fecha */}
-                                  <text x={tipX+tipW-12} y={tipY+20}
-                                    fill={C.textSub} fontSize={10}
-                                    fontFamily="Arial,sans-serif" textAnchor="end">
+                                  <text x={tipX+tipW-12} y={tipY+20} fill={C.textSub} fontSize={10} fontFamily="Arial,sans-serif" textAnchor="end">
                                     {tarea.fecha?.slice(8)}/{tarea.fecha?.slice(5,7)}
                                   </text>
-                                  {/* Separador */}
-                                  <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28}
-                                    stroke={C.border} strokeWidth={1} />
-                                  {/* Texto: comentario */}
+                                  <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28} stroke={C.border} strokeWidth={1} />
                                   <text x={tipX+12} y={tipY+44}
-                                    fill={tarea.comentario ? C.textSub : C.textMuted}
+                                    fill={tarea.comentario?C.textSub:C.textMuted}
                                     fontSize={10} fontFamily="Arial,sans-serif"
                                     fontStyle={tarea.comentario?"normal":"italic"}>
                                     {tarea.comentario
-                                      ? tarea.comentario.slice(0,34)+(tarea.comentario.length>34?"…":"")
-                                      : "Sin comentario · clic para editar"}
+                                      ?tarea.comentario.slice(0,34)+(tarea.comentario.length>34?"…":"")
+                                      :"Sin comentario · clic para editar"}
                                   </text>
                                 </g>
                               );
@@ -416,13 +383,11 @@ export default function HuertaApp() {
                   );
                 })}
 
-                {todayX && (
+                {todayX&&(
                   <g style={{ pointerEvents:"none" }}>
                     <line x1={todayX} y1={HEADER_H} x2={todayX} y2={svgH}
-                      stroke={C.today} strokeWidth={2}
-                      strokeDasharray="5 4" opacity={0.9} />
-                    <rect x={todayX-20} y={svgH-22} width={40} height={20} rx={4}
-                      fill={C.today} />
+                      stroke={C.today} strokeWidth={2} strokeDasharray="5 4" opacity={0.9} />
+                    <rect x={todayX-20} y={svgH-22} width={40} height={20} rx={4} fill={C.today} />
                     <text x={todayX} y={svgH-8} textAnchor="middle"
                       fill="white" fontSize={9} fontWeight="bold"
                       fontFamily="Arial,sans-serif">HOY</text>
@@ -431,7 +396,7 @@ export default function HuertaApp() {
               </svg>
             </div>
 
-            {cultivosFiltrados.length===0 && (
+            {cultivosFiltrados.length===0&&(
               <div style={{ textAlign:"center", padding:52, color:C.textMuted,
                 fontSize:15, fontStyle:"italic" }}>
                 No hay cultivos para mostrar.<br/>
@@ -444,20 +409,36 @@ export default function HuertaApp() {
         )}
 
         {/* ════ LIBRO ════ */}
-        {view==="libro" && (
+        {view==="libro"&&(
           <div>
             <div style={{ display:"flex", justifyContent:"space-between",
-              alignItems:"center", marginBottom:20 }}>
-              <h2 style={{ margin:0, color:C.textMain, fontSize:20,
-                fontWeight:"bold" }}>📖 Mis Cultivos</h2>
+              alignItems:"center", marginBottom:20, flexWrap:"wrap", gap:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <h2 style={{ margin:0, color:C.textMain, fontSize:20, fontWeight:"bold" }}>
+                  📖 Mis Cultivos
+                </h2>
+                <div style={{ display:"flex", background:C.bgCard,
+                  border:`1px solid ${C.border}`, borderRadius:6, overflow:"hidden" }}>
+                  {["activos","todos"].map(m=>(
+                    <button key={m} onClick={()=>setLibroMode(m)} style={{
+                      padding:"6px 14px", border:"none",
+                      background:libroMode===m?"#3b2f1e":"transparent",
+                      color:libroMode===m?"#f5ead8":C.textSub,
+                      cursor:"pointer", fontSize:12,
+                      fontWeight:libroMode===m?"bold":"normal",
+                      fontFamily:"Georgia,serif",
+                    }}>{m==="activos"?"Solo activos":"Todos"}</button>
+                  ))}
+                </div>
+              </div>
               <button onClick={()=>setShowAddCultivo(true)} style={btnPrimary}>
                 + Nuevo Cultivo
               </button>
             </div>
             <div style={{ display:"grid",
               gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:16 }}>
-              {cultivos.map(c=>{
-                const tareasC = tareas.filter(t=>t.cultivoId===c.id);
+              {cultivosLibro.map(c=>{
+                const tareasC=tareas.filter(t=>t.cultivoId===c.id);
                 return (
                   <div key={c.id} style={{ background:C.bgCard,
                     border:`1px solid ${C.border}`,
@@ -476,7 +457,7 @@ export default function HuertaApp() {
                           {c.año}{c.ubicacion&&`  ·  ${c.ubicacion}`}
                         </div>
                       </div>
-                      <button onClick={()=>toggleActivo(c.id)} style={{
+                      <button onClick={()=>toggleActivo(c.id,c.activo)} style={{
                         padding:"4px 12px", borderRadius:20,
                         border:`1.5px solid ${c.activo?C.accent:C.border}`,
                         background:c.activo?"#e8f5e2":"transparent",
@@ -494,7 +475,7 @@ export default function HuertaApp() {
                       </div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                         {tareasC.slice(0,8).map(t=>{
-                          const info = getTipoInfo(t.tipo, t.label, tareasCustom);
+                          const info=getTipoInfo(t.tipo,t.label,tareasCustom);
                           return (
                             <TareaChip key={t.id} tarea={t} info={info}
                               onClick={()=>setEditTask({...t})} />
@@ -508,9 +489,15 @@ export default function HuertaApp() {
                     }} style={{ marginTop:14, width:"100%", padding:"8px",
                       borderRadius:6, border:`1px dashed ${C.border}`,
                       background:"transparent", color:C.textSub,
-                      cursor:"pointer", fontSize:12,
-                      fontFamily:"Arial,sans-serif" }}>
+                      cursor:"pointer", fontSize:12, fontFamily:"Arial,sans-serif" }}>
                       + Agregar tarea
+                    </button>
+                    <button onClick={()=>deleteCultivo(c.id)} style={{
+                      marginTop:6, width:"100%", padding:"7px",
+                      borderRadius:6, border:`1px solid #b91c1c33`,
+                      background:"transparent", color:"#b91c1c",
+                      cursor:"pointer", fontSize:11, fontFamily:"Arial,sans-serif" }}>
+                      🗑 Eliminar cultivo
                     </button>
                   </div>
                 );
@@ -521,14 +508,13 @@ export default function HuertaApp() {
       </main>
 
       {/* ════ MODALES ════ */}
-
-      {editTask && (
+      {editTask&&(
         <Modal title="✏️  Editar Tarea" onClose={()=>setEditTask(null)}>
           <Campo label="Tipo de tarea">
             <select value={editTask.tipo}
               onChange={e=>{
-                const info = todosLosTipos.find(t=>t.id===e.target.value);
-                setEditTask({...editTask, tipo:e.target.value, label:info?.label||editTask.label});
+                const info=todosLosTipos.find(t=>t.id===e.target.value);
+                setEditTask({...editTask,tipo:e.target.value,label:info?.label||editTask.label});
               }} style={sel}>
               {todosLosTipos.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
@@ -553,7 +539,7 @@ export default function HuertaApp() {
         </Modal>
       )}
 
-      {showAddTask && (
+      {showAddTask&&(
         <Modal title="🌱  Nueva Tarea" onClose={()=>setShowAddTask(false)}>
           <Campo label="Cultivo">
             <select value={newTask.cultivoId}
@@ -568,21 +554,17 @@ export default function HuertaApp() {
               <option value="otro">➕ Otra tarea (nueva)...</option>
             </select>
           </Campo>
-
-          {/* Campo nombre cuando se elige "otra tarea" */}
-          {newTask.tipo==="otro" && (
+          {newTask.tipo==="otro"&&(
             <Campo label="Nombre de la nueva tarea">
               <input value={newTask.nombreCustom}
                 onChange={e=>setNewTask({...newTask,nombreCustom:e.target.value})}
-                style={{...inp, borderColor:"#92660a", borderWidth:2}}
+                style={{...inp,borderColor:"#92660a",borderWidth:2}}
                 placeholder="Ej: Preparar compost, Instalar riego..." />
-              <span style={{ fontSize:11, color:C.textSub, fontFamily:"Arial,sans-serif",
-                marginTop:3 }}>
-                💡 Esta tarea quedará guardada en tu lista para usarla de nuevo
+              <span style={{ fontSize:11, color:C.textSub, fontFamily:"Arial,sans-serif", marginTop:3 }}>
+                💡 Quedará guardada en tu lista para usarla de nuevo
               </span>
             </Campo>
           )}
-
           <Campo label="Fecha">
             <input type="date" value={newTask.fecha}
               onChange={e=>setNewTask({...newTask,fecha:e.target.value})} style={inp} />
@@ -600,7 +582,7 @@ export default function HuertaApp() {
         </Modal>
       )}
 
-      {showAddCultivo && (
+      {showAddCultivo&&(
         <Modal title="🪴  Nuevo Cultivo" onClose={()=>setShowAddCultivo(false)}>
           <Campo label="Nombre del cultivo">
             <input value={newCult.nombre}
@@ -633,93 +615,65 @@ export default function HuertaApp() {
   );
 }
 
-// ── Chip de tarea con nube al hover (vista Cultivos) ──────────────
+// ── TareaChip con nube ──
 function TareaChip({ tarea, info, onClick }) {
   const [hov, setHov] = useState(false);
   const fecha = tarea.fecha ? `${tarea.fecha.slice(8)}/${tarea.fecha.slice(5,7)}` : "";
   return (
     <div style={{ position:"relative", display:"inline-block" }}
-      onMouseEnter={()=>setHov(true)}
-      onMouseLeave={()=>setHov(false)}>
-      {/* El chip */}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
       <div onClick={onClick} style={{
         display:"flex", alignItems:"center", gap:4,
         padding:"5px 11px", borderRadius:20,
-        background: hov ? info.light : info.light,
-        border:`1.5px solid ${hov ? info.color : info.color+"99"}`,
-        cursor:"pointer", fontSize:11,
-        color:info.color, fontWeight:"bold",
+        background:info.light, border:`1.5px solid ${hov?info.color:info.color+"99"}`,
+        cursor:"pointer", fontSize:11, color:info.color, fontWeight:"bold",
         fontFamily:"Arial,sans-serif",
-        boxShadow: hov ? `0 2px 8px ${info.color}33` : "0 1px 3px rgba(0,0,0,0.08)",
-        transition:"all .15s",
-        userSelect:"none",
+        boxShadow:hov?`0 2px 8px ${info.color}33`:"0 1px 3px rgba(0,0,0,0.08)",
+        transition:"all .15s", userSelect:"none",
       }}>
         <span style={{ fontWeight:"bold", letterSpacing:".5px" }}>
-          {info.abrev || (tarea.label||"").slice(0,3).toUpperCase()}
+          {info.abrev||(tarea.label||"").slice(0,3).toUpperCase()}
         </span>
-        <span style={{ color: info.color+"cc", fontWeight:"normal" }}>
-          {fecha}
-        </span>
-        {tarea.comentario && (
-          <span style={{ width:7, height:7, borderRadius:"50%",
-            background:"#e67e22", display:"inline-block",
-            marginLeft:1, border:"1.5px solid white" }} />
+        <span style={{ color:info.color+"cc", fontWeight:"normal" }}>{fecha}</span>
+        {tarea.comentario&&(
+          <span style={{ width:7, height:7, borderRadius:"50%", background:"#e67e22",
+            display:"inline-block", marginLeft:1, border:"1.5px solid white" }} />
         )}
       </div>
-
-      {/* Nube tooltip — solo si hay comentario o si se hace hover */}
-      {hov && (
-        <div style={{
-          position:"absolute",
-          bottom:"calc(100% + 14px)",
-          left:"50%",
-          transform:"translateX(-50%)",
-          zIndex:200,
-          pointerEvents:"none",
-          minWidth:180,
-          maxWidth:240,
-          filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.18))",
-        }}>
-          <svg width="100%" viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg"
-            style={{ overflow:"visible", display:"block" }}>
-            {/* Cuerpo nube */}
+      {hov&&(
+        <div style={{ position:"absolute", bottom:"calc(100% + 14px)", left:"50%",
+          transform:"translateX(-50%)", zIndex:200, pointerEvents:"none",
+          minWidth:180, maxWidth:240,
+          filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.18))" }}>
+          <svg width="220" height="80" viewBox="0 0 220 80"
+            xmlns="http://www.w3.org/2000/svg" style={{ overflow:"visible", display:"block" }}>
             <rect x="4" y="18" width="212" height="54" rx="14"
               fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            {/* Bolitas superiores */}
             <circle cx="30"  cy="18" r="10" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
             <circle cx="54"  cy="10" r="13" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
             <circle cx="82"  cy="6"  r="15" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
             <circle cx="112" cy="8"  r="13" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
             <circle cx="138" cy="12" r="11" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
             <circle cx="162" cy="16" r="9"  fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            {/* Cubrir el borde del rect detrás de las bolitas */}
             <rect x="5" y="19" width="210" height="14" fill="#fffdf7" />
-            {/* Cola hacia abajo */}
             <polygon points="102,72 118,72 110,82"
               fill="#fffdf7" stroke={info.color} strokeWidth="1.5" strokeLinejoin="round" />
             <rect x="103" y="70" width="14" height="5" fill="#fffdf7" />
-            {/* Franja suave de color */}
             <rect x="5" y="19" width="210" height="10" rx="12" fill={info.color} opacity="0.12" />
-            {/* Nombre tarea */}
-            <text x="14" y="38" fill={info.color}
-              fontSize="12" fontWeight="bold" fontFamily="Georgia,serif">
-              {tarea.label || info.label}
+            <text x="14" y="38" fill={info.color} fontSize="12" fontWeight="bold" fontFamily="Georgia,serif">
+              {tarea.label||info.label}
             </text>
-            {/* Fecha */}
-            <text x="206" y="38" fill="#7a6248"
-              fontSize="10" fontFamily="Arial,sans-serif" textAnchor="end">
+            <text x="206" y="38" fill="#7a6248" fontSize="10" fontFamily="Arial,sans-serif" textAnchor="end">
               {fecha}
             </text>
-            {/* Separador */}
             <line x1="14" y1="46" x2="206" y2="46" stroke="#c8b89a" strokeWidth="1" />
-            {/* Comentario */}
             <text x="14" y="62"
-              fill={tarea.comentario ? "#7a6248" : "#a89070"}
+              fill={tarea.comentario?"#7a6248":"#a89070"}
               fontSize="10" fontFamily="Arial,sans-serif"
-              fontStyle={tarea.comentario ? "normal" : "italic"}>
+              fontStyle={tarea.comentario?"normal":"italic"}>
               {tarea.comentario
-                ? tarea.comentario.slice(0,32) + (tarea.comentario.length>32?"…":"")
-                : "Sin comentario"}
+                ?tarea.comentario.slice(0,32)+(tarea.comentario.length>32?"…":"")
+                :"Sin comentario"}
             </text>
           </svg>
         </div>
@@ -730,17 +684,17 @@ function TareaChip({ tarea, info, onClick }) {
 
 function Modal({ title, children, onClose }) {
   return (
-    <div style={{ position:"fixed", inset:0,
-      background:"rgba(40,25,10,0.55)", backdropFilter:"blur(3px)",
-      display:"flex", alignItems:"center", justifyContent:"center",
-      zIndex:1000, padding:20 }}
+    <div style={{ position:"fixed", inset:0, background:"rgba(40,25,10,0.55)",
+      backdropFilter:"blur(3px)", display:"flex", alignItems:"center",
+      justifyContent:"center", zIndex:1000, padding:20 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
       <div style={{ background:"#fffdf7", border:`1.5px solid #c8b89a`,
         borderRadius:10, padding:28, width:"100%", maxWidth:430,
         maxHeight:"90vh", overflowY:"auto",
         boxShadow:"0 8px 40px rgba(0,0,0,0.25)", fontFamily:"Georgia,serif" }}>
-        <h3 style={{ margin:"0 0 20px", color:"#2c1f0e",
-          fontSize:17, fontWeight:"bold" }}>{title}</h3>
+        <h3 style={{ margin:"0 0 20px", color:"#2c1f0e", fontSize:17, fontWeight:"bold" }}>
+          {title}
+        </h3>
         {children}
       </div>
     </div>
@@ -751,14 +705,13 @@ function Campo({ label, children }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:15 }}>
       <span style={{ fontSize:11, color:"#7a6248", textTransform:"uppercase",
-        letterSpacing:"1px", fontWeight:"bold",
-        fontFamily:"Arial,sans-serif" }}>{label}</span>
+        letterSpacing:"1px", fontWeight:"bold", fontFamily:"Arial,sans-serif" }}>{label}</span>
       {children}
     </div>
   );
 }
 
-const btnNav    = { width:30, height:30, borderRadius:"50%", border:"none",
+const btnNav     = { width:30, height:30, borderRadius:"50%", border:"none",
   background:"transparent", color:"#2c1f0e", cursor:"pointer", fontSize:13, fontWeight:"bold" };
 const btnPrimary = { padding:"9px 22px", borderRadius:6, border:"none",
   background:"#3b2f1e", color:"#f5ead8", cursor:"pointer", fontSize:13,
