@@ -16,6 +16,20 @@ const TAREAS_SISTEMA = [
 ];
 
 const MONTHS   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MONTHS_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+// Fecha es "YYYY-MM" — devuelve nombre corto del mes
+function mesLabel(fecha) {
+  if (!fecha) return "";
+  const m = parseInt(fecha.slice(5,7),10)-1;
+  return MONTHS[m] || "";
+}
+// Posición X centrada en el mes
+function mesX(fecha, labelW, colW) {
+  if (!fecha) return labelW;
+  const m = parseInt(fecha.slice(5,7),10)-1;
+  return labelW + m*colW + colW/2;
+}
 const COL_W    = 90;
 const ROW_H    = 58;
 const LABEL_W  = 170;
@@ -161,10 +175,10 @@ export default function HuertaApp() {
 
   function monthX(i) { return LABEL_W + i*COL_W; }
   function taskX(fecha) {
-    const d = new Date(fecha+"T12:00:00");
-    const m = d.getMonth(), day = d.getDate();
-    const days = new Date(d.getFullYear(),m+1,0).getDate();
-    return monthX(m)+(day/days)*COL_W;
+    // fecha es "YYYY-MM" — centro del mes
+    if (!fecha) return LABEL_W;
+    const m = parseInt(fecha.slice(5,7),10)-1;
+    return monthX(m) + COL_W/2;
   }
   function tareasDe(cId) {
     return tareas.filter(t=>t.cultivoId===cId && t.fecha?.startsWith(String(year)));
@@ -174,7 +188,8 @@ export default function HuertaApp() {
   const svgH = HEADER_H+ROW_H*Math.max(1,cultivosFiltrados.length)+2;
   const todayX = (() => {
     const t = new Date();
-    return t.getFullYear()===year ? taskX(t.toISOString().slice(0,10)) : null;
+    const mm = String(t.getMonth()+1).padStart(2,"0");
+    return t.getFullYear()===year ? taskX(`${year}-${mm}`) : null;
   })();
 
   if (loading) return (
@@ -374,7 +389,7 @@ export default function HuertaApp() {
                                     {tarea.label||info.label}
                                   </text>
                                   <text x={tipX+tipW-12} y={tipY+20} fill={C.textSub} fontSize={10} fontFamily="Arial,sans-serif" textAnchor="end">
-                                    {tarea.fecha?.slice(8)}/{tarea.fecha?.slice(5,7)}
+                                    {mesLabel(tarea.fecha)}
                                   </text>
                                   <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28} stroke={C.border} strokeWidth={1} />
                                   <text x={tipX+12} y={tipY+44}
@@ -531,9 +546,17 @@ export default function HuertaApp() {
               {todosLosTipos.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </Campo>
-          <Campo label="Fecha">
-            <input type="date" value={editTask.fecha}
-              onChange={e=>setEditTask({...editTask,fecha:e.target.value})} style={inp} />
+          <Campo label="Mes">
+            <select value={editTask.fecha}
+              onChange={e=>setEditTask({...editTask,fecha:e.target.value})} style={sel}>
+              <option value="">— Selecciona un mes —</option>
+              {MONTHS_FULL.map((m,i)=>{
+                const mm=String(i+1).padStart(2,"0");
+                const añoTarea=editTask.fecha?.slice(0,4)||String(year);
+                const val=`${añoTarea}-${mm}`;
+                return <option key={i} value={val}>{m} {añoTarea}</option>;
+              })}
+            </select>
           </Campo>
           <Campo label="Comentario / Observación">
             <textarea value={editTask.comentario}
@@ -594,7 +617,7 @@ export default function HuertaApp() {
                           {t.label||info.label}
                         </span>
                         <span style={{ color:C.textMuted }}>
-                          {t.fecha?.slice(8)}/{t.fecha?.slice(5,7)}/{t.fecha?.slice(0,4)}
+                          {mesLabel(t.fecha)} {t.fecha?.slice(0,4)}
                         </span>
                         {t.comentario&&<span style={{ color:C.textMuted, fontStyle:"italic",
                           fontSize:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -626,10 +649,17 @@ export default function HuertaApp() {
               </Campo>
             )}
 
-            {/* Fecha principal */}
-            <Campo label="Fecha">
-              <input type="date" value={newTask.fecha}
-                onChange={e=>{ setNewTask({...newTask,fecha:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={inp} />
+            {/* Mes principal */}
+            <Campo label="Mes">
+              <select value={newTask.fecha}
+                onChange={e=>{ setNewTask({...newTask,fecha:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={sel}>
+                <option value="">— Selecciona un mes —</option>
+                {MONTHS_FULL.map((m,i)=>{
+                  const mm = String(i+1).padStart(2,"0");
+                  const val = `${year}-${mm}`;
+                  return <option key={i} value={val}>{m} {year}</option>;
+                })}
+              </select>
             </Campo>
 
             {/* Comentario */}
@@ -670,12 +700,19 @@ export default function HuertaApp() {
                     </div>
                     {fechasExtra.map((f,i)=>(
                       <div key={i} style={{ display:"flex", gap:6, alignItems:"center" }}>
-                        <input type="date" value={f}
+                        <select value={f}
                           onChange={e=>{
                             const arr=[...fechasExtra];
                             arr[i]=e.target.value;
                             setFechasExtra(arr);
-                          }} style={{...inp, marginBottom:0, flex:1}} />
+                          }} style={{...sel, marginBottom:0, flex:1}}>
+                          <option value="">— Mes —</option>
+                          {MONTHS_FULL.map((m,j)=>{
+                            const mm=String(j+1).padStart(2,"0");
+                            const val=`${year}-${mm}`;
+                            return <option key={j} value={val}>{m} {year}</option>;
+                          })}
+                        </select>
                         {fechasExtra.length>1&&(
                           <button onClick={()=>setFechasExtra(fechasExtra.filter((_,j)=>j!==i))}
                             style={{ padding:"6px 10px", borderRadius:6,
@@ -752,7 +789,7 @@ export default function HuertaApp() {
 // ── TareaChip con nube ──
 function TareaChip({ tarea, info, onClick }) {
   const [hov, setHov] = useState(false);
-  const fecha = tarea.fecha ? `${tarea.fecha.slice(8)}/${tarea.fecha.slice(5,7)}` : "";
+  const fecha = tarea.fecha ? mesLabel(tarea.fecha) : "";
   return (
     <div style={{ position:"relative", display:"inline-block" }}
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
@@ -798,7 +835,7 @@ function TareaChip({ tarea, info, onClick }) {
               {tarea.label||info.label}
             </text>
             <text x="206" y="38" fill="#7a6248" fontSize="10" fontFamily="Arial,sans-serif" textAnchor="end">
-              {fecha}
+              {mesLabel(tarea.fecha)}
             </text>
             <line x1="14" y1="46" x2="206" y2="46" stroke="#c8b89a" strokeWidth="1" />
             <text x="14" y="62"
