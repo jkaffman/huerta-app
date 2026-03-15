@@ -243,15 +243,6 @@ export default function HuertaApp() {
               justifyContent:"space-between", marginBottom:16,
               flexWrap:"wrap", gap:10 }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                {/* Selector de año — se mantiene para filtrar datos, pero no se muestra en el Gantt */}
-                <div style={{ display:"flex", alignItems:"center", gap:2,
-                  background:C.bgCard, border:`1px solid ${C.border}`,
-                  borderRadius:6, padding:"4px 10px" }}>
-                  <button onClick={()=>setYear(y=>y-1)} style={btnNav}>◀</button>
-                  <span style={{ fontSize:20, fontWeight:"bold", color:C.textMain,
-                    minWidth:56, textAlign:"center" }}>{year}</span>
-                  <button onClick={()=>setYear(y=>y+1)} style={btnNav}>▶</button>
-                </div>
                 <div style={{ display:"flex", background:C.bgCard,
                   border:`1px solid ${C.border}`, borderRadius:6, overflow:"hidden" }}>
                   {["activos","todos"].map(m=>(
@@ -339,85 +330,78 @@ export default function HuertaApp() {
                         {!c.activo?"  ·  inactivo":""}
                       </text>
 
-                      {tareasDe(c.id).map(tarea=>{
-                        const info=getTipoInfo(tarea.tipo,tarea.label,tareasCustom);
-                        const m=parseInt(tarea.fecha?.slice(5,7)||"1",10)-1;
-                        const barX=monthX(m)+6;
-                        const barW=COL_W-12;
-                        const barH=28;
-                        const cy=y0+ROW_H/2;
-                        const barY=cy-barH/2;
-                        const isHov=hoveredTask===tarea.id;
-                        // tx still needed for tooltip positioning
-                        const tx=monthX(m)+COL_W/2;
-                        return (
-                          <g key={tarea.id} style={{ cursor:"pointer" }}
-                            onMouseEnter={()=>setHoveredTask(tarea.id)}
-                            onMouseLeave={()=>setHoveredTask(null)}
-                            onClick={()=>setEditTask({...tarea})}>
-                            {/* Sombra */}
-                            <rect x={barX+2} y={barY+3} width={barW} height={barH}
-                              rx={barH/2} fill="rgba(0,0,0,0.10)" />
-                            {/* Barra principal */}
-                            <rect x={barX} y={barY} width={barW} height={barH}
-                              rx={barH/2}
-                              fill={info.color}
-                              opacity={isHov?1:0.88}
-                              stroke={isHov?"white":"none"}
-                              strokeWidth={isHov?1.5:0} />
-                            {/* Texto abreviación */}
-                            <text x={tx} y={cy+5} textAnchor="middle"
-                              fontSize={11} fontWeight="bold"
-                              fontFamily="Arial,sans-serif"
-                              fill="white">{info.abrev||(tarea.label||"").slice(0,3).toUpperCase()}</text>
-                            {tarea.comentario&&(
-                              <circle cx={barX+barW-4} cy={barY+4} r={5}
-                                fill="#e67e22" stroke="white" strokeWidth={1.5} />
-                            )}
-                            {/* Nube tooltip Gantt */}
-                            {isHov&&(()=>{
-                              const tipW=200, tipH=58;
-                              const tipX=Math.min(Math.max(tx-tipW/2,LABEL_W+4),svgW-tipW-6);
-                              const tipY=Math.max(6,barY-tipH-14);
-                              const tailX=Math.min(Math.max(tx,tipX+20),tipX+tipW-20);
-                              return (
-                                <g style={{ pointerEvents:"none" }}>
-                                  <rect x={tipX+3} y={tipY+3} width={tipW} height={tipH}
-                                    rx={14} fill="rgba(0,0,0,0.10)" />
-                                  <rect x={tipX} y={tipY} width={tipW} height={tipH}
-                                    rx={14} fill="#FAF8FE"
-                                    stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+22} cy={tipY} r={9} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+44} cy={tipY-6} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+68} cy={tipY-9} r={12} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+94} cy={tipY-7} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+118} cy={tipY-4} r={10} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
-                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#FAF8FE" />
-                                  <polygon points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`}
-                                    fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round" />
-                                  <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#FAF8FE" />
-                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8} rx={13} fill={info.color} opacity={0.15} />
-                                  <text x={tipX+12} y={tipY+20} fill={info.color} fontSize={11} fontWeight="bold" fontFamily="Georgia,serif">
-                                    {tarea.label||info.label}
-                                  </text>
-                                  <text x={tipX+tipW-12} y={tipY+20} fill={C.textSub} fontSize={10} fontFamily="Arial,sans-serif" textAnchor="end">
-                                    {mesLabel(tarea.fecha)}
-                                  </text>
-                                  <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28} stroke={C.border} strokeWidth={1} />
-                                  <text x={tipX+12} y={tipY+44}
-                                    fill={tarea.comentario?C.textSub:C.textMuted}
-                                    fontSize={10} fontFamily="Arial,sans-serif"
-                                    fontStyle={tarea.comentario?"normal":"italic"}>
-                                    {tarea.comentario
-                                      ?tarea.comentario.slice(0,34)+(tarea.comentario.length>34?"…":"")
-                                      :"Sin comentario · clic para editar"}
-                                  </text>
-                                </g>
-                              );
-                            })()}
-                          </g>
-                        );
-                      })}
+                      {/* AGRUPADO POR MES - barras divididas */}
+                      {(()=>{
+                        const barH=28, cy=y0+ROW_H/2, barY=cy-barH/2, R=barH/2;
+                        const porMes={};
+                        tareasDe(c.id).forEach(t=>{
+                          const m=parseInt(t.fecha?.slice(5,7)||"1",10)-1;
+                          if(!porMes[m]) porMes[m]=[];
+                          porMes[m].push(t);
+                        });
+                        return Object.entries(porMes).map(([mStr,tareasEnMes])=>{
+                          const m=parseInt(mStr);
+                          const barX=monthX(m)+6;
+                          const barW=COL_W-12;
+                          const n=tareasEnMes.length;
+                          const secW=barW/n;
+                          const clipId=`cl-${c.id}-${m}`;
+                          return (
+                            <g key={`m${m}`}>
+                              <defs><clipPath id={clipId}><rect x={barX} y={barY} width={barW} height={barH} rx={R}/></clipPath></defs>
+                              <rect x={barX+2} y={barY+3} width={barW} height={barH} rx={R} fill="rgba(0,0,0,0.10)"/>
+                              {tareasEnMes.map((tarea,idx)=>{
+                                const info=getTipoInfo(tarea.tipo,tarea.label,tareasCustom);
+                                const secX=barX+idx*secW;
+                                const txSec=secX+secW/2;
+                                const isHov=hoveredTask===tarea.id;
+                                return (
+                                  <g key={tarea.id}>
+                                    <rect x={secX} y={barY} width={secW} height={barH} fill={info.color} opacity={isHov?1:0.88} clipPath={`url(#${clipId})`}/>
+                                    {idx>0&&<line x1={secX} y1={barY+3} x2={secX} y2={barY+barH-3} stroke="white" strokeWidth={1.5} opacity={0.5}/>}
+                                    <text x={txSec} y={cy+5} textAnchor="middle" fontSize={secW>32?11:9} fontWeight="bold" fontFamily="Arial,sans-serif" fill="white" clipPath={`url(#${clipId})`}>
+                                      {info.abrev||(tarea.label||"").slice(0,3).toUpperCase()}
+                                    </text>
+                                    {tarea.comentario&&<circle cx={secX+secW-5} cy={barY+5} r={4} fill="#e67e22" stroke="white" strokeWidth={1.5}/>}
+                                    <rect x={secX} y={barY} width={secW} height={barH} fill="transparent" clipPath={`url(#${clipId})`} style={{cursor:"pointer"}}
+                                      onMouseEnter={()=>setHoveredTask(tarea.id)}
+                                      onMouseLeave={()=>setHoveredTask(null)}
+                                      onClick={()=>setEditTask({...tarea})}/>
+                                    {isHov&&(()=>{
+                                      const tipW=200,tipH=58;
+                                      const tipX=Math.min(Math.max(txSec-tipW/2,LABEL_W+4),svgW-tipW-6);
+                                      const tipY=Math.max(6,barY-tipH-14);
+                                      const tailX=Math.min(Math.max(txSec,tipX+20),tipX+tipW-20);
+                                      return (
+                                        <g style={{pointerEvents:"none"}}>
+                                          <rect x={tipX+3} y={tipY+3} width={tipW} height={tipH} rx={14} fill="rgba(0,0,0,0.10)"/>
+                                          <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={14} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                          <circle cx={tipX+22} cy={tipY} r={9} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                          <circle cx={tipX+44} cy={tipY-6} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                          <circle cx={tipX+68} cy={tipY-9} r={12} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                          <circle cx={tipX+94} cy={tipY-7} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                          <circle cx={tipX+118} cy={tipY-4} r={10} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                          <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#FAF8FE"/>
+                                          <polygon points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round"/>
+                                          <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#FAF8FE"/>
+                                          <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8} rx={13} fill={info.color} opacity={0.15}/>
+                                          <text x={tipX+12} y={tipY+20} fill={info.color} fontSize={11} fontWeight="bold" fontFamily="Georgia,serif">{tarea.label||info.label}</text>
+                                          <text x={tipX+tipW-12} y={tipY+20} fill={C.textSub} fontSize={10} fontFamily="Arial,sans-serif" textAnchor="end">{mesLabel(tarea.fecha)}</text>
+                                          <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28} stroke={C.border} strokeWidth={1}/>
+                                          <text x={tipX+12} y={tipY+44} fill={tarea.comentario?C.textSub:C.textMuted} fontSize={10} fontFamily="Arial,sans-serif" fontStyle={tarea.comentario?"normal":"italic"}>
+                                            {tarea.comentario?tarea.comentario.slice(0,34)+(tarea.comentario.length>34?"…":""):"Sin comentario · clic para editar"}
+                                          </text>
+                                        </g>
+                                      );
+                                    })()}
+                                  </g>
+                                );
+                              })}
+                            </g>
+                          );
+                        });
+                      })()}
+
                     </g>
                   );
                 })}
