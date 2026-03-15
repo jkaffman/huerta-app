@@ -6,7 +6,7 @@ import {
 
 const TAREAS_SISTEMA = [
   { id:"sembrar",     label:"Sembrar",      color:"#2d7a3a", light:"#e8f5e2", abrev:"SEM" },
-  { id:"trasplantar", label:"Trasplantar",  color:"#0369a1", light:"#dbeafe", abrev:"TRA" },
+  { id:"trasplantar", label:"Trasplantar",  color:"#7B5EA7", light:"#ede9fe", abrev:"TRA" },
   { id:"regar",       label:"Regar",        color:"#1d4ed8", light:"#eff6ff", abrev:"REG" },
   { id:"fertilizar",  label:"Fertilizar",   color:"#92660a", light:"#fef3c7", abrev:"FER" },
   { id:"plagas",      label:"Ctrl. plagas", color:"#b91c1c", light:"#fee2e2", abrev:"PLA" },
@@ -36,14 +36,15 @@ const LABEL_W  = 170;
 const HEADER_H = 42;
 const TASK_R   = 16;
 
+// ── Paleta lila / naturalista ──
 const C = {
-  bg:"#f5f0e8", bgCard:"#fffdf7", bgHeader:"#3b2f1e",
-  bgGantt:"#fdfaf3", bgRow1:"#fdfaf3", bgRow2:"#f7f2e8",
-  bgLabel1:"#f0ebe0", bgLabel2:"#e8e3d8", bgMonthH:"#3b2f1e",
-  border:"#c8b89a", borderDark:"#8a7055",
-  textMain:"#2c1f0e", textSub:"#7a6248", textMuted:"#a89070",
-  textHead:"#f5ead8", monthText:"#f5ead8",
-  today:"#c2410c", accent:"#5c8a3c",
+  bg:"#F0EDF8", bgCard:"#FAF8FE", bgHeader:"#4A3D6B",
+  bgGantt:"#F5F2FB", bgRow1:"#F5F2FB", bgRow2:"#EDE9F5",
+  bgLabel1:"#EAE5F5", bgLabel2:"#E2DCF0", bgMonthH:"#4A3D6B",
+  border:"#C9C2E0", borderDark:"#7B6FA0",
+  textMain:"#2E2248", textSub:"#7B6FA0", textMuted:"#A99DC8",
+  textHead:"#F0EDF8", monthText:"#F0EDF8",
+  today:"#c2410c", accent:"#5D8C3A",
 };
 
 function colorParaPersonalizada(label) {
@@ -81,8 +82,8 @@ export default function HuertaApp() {
   const [hoveredTask,    setHoveredTask]    = useState(null);
   const [year,           setYear]           = useState(new Date().getFullYear());
   const [newTask, setNewTask] = useState({ cultivoId:"", tipo:"sembrar", label:"Sembrar", fecha:"", comentario:"", nombreCustom:"" });
-  const [recurrente,    setRecurrente]    = useState(null); // null=sin respuesta, false=no, true=si
-  const [fechasExtra,   setFechasExtra]   = useState([""]);  // fechas adicionales si es recurrente
+  const [recurrente,    setRecurrente]    = useState(null);
+  const [fechasExtra,   setFechasExtra]   = useState([""]);
   const [newCult, setNewCult] = useState({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
 
   // ── Cargar datos de Firebase ──
@@ -143,9 +144,7 @@ export default function HuertaApp() {
         tipoFinal = ref.id;
       }
     }
-    // Guardar fecha principal
     const todasLasFechas = [newTask.fecha];
-    // Si es recurrente, agregar fechas extra válidas
     if (recurrente === true) {
       fechasExtra.forEach(f => { if (f) todasLasFechas.push(f); });
     }
@@ -175,7 +174,6 @@ export default function HuertaApp() {
 
   function monthX(i) { return LABEL_W + i*COL_W; }
   function taskX(fecha) {
-    // fecha es "YYYY-MM" — centro del mes
     if (!fecha) return LABEL_W;
     const m = parseInt(fecha.slice(5,7),10)-1;
     return monthX(m) + COL_W/2;
@@ -216,7 +214,7 @@ export default function HuertaApp() {
           <div>
             <div style={{ fontSize:20, fontWeight:"bold", color:C.textHead,
               letterSpacing:"0.5px" }}>Libro de Huerta</div>
-            <div style={{ fontSize:10, color:"#a89070", letterSpacing:"3px",
+            <div style={{ fontSize:10, color:"#C9C2E0", letterSpacing:"3px",
               textTransform:"uppercase", fontFamily:"Arial,sans-serif" }}>
               Planificador Anual
             </div>
@@ -227,7 +225,7 @@ export default function HuertaApp() {
             <button key={v} onClick={()=>setView(v)} style={{
               padding:"8px 22px", borderRadius:6,
               border:view===v?"none":`1px solid ${C.borderDark}`,
-              background:view===v?"#c8a96e":"transparent",
+              background:view===v?"#9B8FBB":"transparent",
               color:view===v?C.bgHeader:C.textHead,
               cursor:"pointer", fontSize:13, fontWeight:"bold",
               fontFamily:"Georgia,serif",
@@ -245,6 +243,7 @@ export default function HuertaApp() {
               justifyContent:"space-between", marginBottom:16,
               flexWrap:"wrap", gap:10 }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                {/* Selector de año — se mantiene para filtrar datos, pero no se muestra en el Gantt */}
                 <div style={{ display:"flex", alignItems:"center", gap:2,
                   background:C.bgCard, border:`1px solid ${C.border}`,
                   borderRadius:6, padding:"4px 10px" }}>
@@ -258,8 +257,8 @@ export default function HuertaApp() {
                   {["activos","todos"].map(m=>(
                     <button key={m} onClick={()=>setGanttMode(m)} style={{
                       padding:"7px 16px", border:"none",
-                      background:ganttMode===m?"#3b2f1e":"transparent",
-                      color:ganttMode===m?"#f5ead8":C.textSub,
+                      background:ganttMode===m?C.bgHeader:"transparent",
+                      color:ganttMode===m?C.textHead:C.textSub,
                       cursor:"pointer", fontSize:12,
                       fontWeight:ganttMode===m?"bold":"normal",
                       fontFamily:"Georgia,serif",
@@ -286,7 +285,7 @@ export default function HuertaApp() {
               ))}
             </div>
 
-            {/* SVG Gantt */}
+            {/* SVG Gantt — cabecera muestra solo mes, sin año */}
             <div style={{ borderRadius:8, border:`2px solid ${C.borderDark}`,
               overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.12)",
               overflowX:"auto", background:C.bgGantt }}>
@@ -294,7 +293,7 @@ export default function HuertaApp() {
                 <rect width={svgW} height={svgH} fill={C.bgGantt} />
                 {MONTHS.map((_,i)=>(
                   <rect key={i} x={monthX(i)} y={0} width={COL_W} height={svgH}
-                    fill={i%2===0?C.bgRow1:"#f2ede3"} />
+                    fill={i%2===0?C.bgRow1:"#EAE5F5"} />
                 ))}
                 <rect x={0} y={0} width={LABEL_W} height={svgH} fill={C.bgLabel1} />
                 <line x1={LABEL_W-.5} y1={0} x2={LABEL_W-.5} y2={svgH}
@@ -307,6 +306,7 @@ export default function HuertaApp() {
                   <g key={i}>
                     <line x1={monthX(i)} y1={0} x2={monthX(i)} y2={svgH}
                       stroke={C.border} strokeWidth={1} />
+                    {/* Solo mes, sin año */}
                     <text x={monthX(i)+COL_W/2} y={HEADER_H/2+6}
                       textAnchor="middle" fill={C.monthText}
                       fontSize={13} fontWeight="bold" fontFamily="Georgia,serif">{m}</text>
@@ -332,9 +332,10 @@ export default function HuertaApp() {
                         fill={c.activo?C.textMain:C.textMuted}
                         fontSize={14} fontWeight="bold" fontFamily="Georgia,serif"
                         fontStyle={c.activo?"normal":"italic"}>{c.nombre}</text>
+                      {/* Ubicación sin año */}
                       <text x={14} y={y0+ROW_H/2+13} fill={C.textSub}
                         fontSize={10} fontFamily="Arial,sans-serif">
-                        {c.año}{c.ubicacion?`  ·  ${c.ubicacion}`:""}
+                        {c.ubicacion||""}
                         {!c.activo?"  ·  inactivo":""}
                       </text>
 
@@ -350,7 +351,7 @@ export default function HuertaApp() {
                             onMouseLeave={()=>setHoveredTask(null)}
                             onClick={()=>setEditTask({...tarea})}>
                             <circle cx={tx+1} cy={cy+2} r={TASK_R}
-                              fill="rgba(0,0,0,0.13)" />
+                              fill="rgba(0,0,0,0.10)" />
                             <circle cx={tx} cy={cy} r={isHov?TASK_R+2:TASK_R}
                               fill={info.light} stroke={info.color}
                               strokeWidth={isHov?3:2} />
@@ -371,19 +372,19 @@ export default function HuertaApp() {
                               return (
                                 <g style={{ pointerEvents:"none" }}>
                                   <rect x={tipX+3} y={tipY+3} width={tipW} height={tipH}
-                                    rx={14} fill="rgba(0,0,0,0.12)" />
+                                    rx={14} fill="rgba(0,0,0,0.10)" />
                                   <rect x={tipX} y={tipY} width={tipW} height={tipH}
-                                    rx={14} fill="#fffdf7"
+                                    rx={14} fill="#FAF8FE"
                                     stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+22} cy={tipY} r={9} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+44} cy={tipY-6} r={11} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+68} cy={tipY-9} r={12} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+94} cy={tipY-7} r={11} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <circle cx={tipX+118} cy={tipY-4} r={10} fill="#fffdf7" stroke={info.color} strokeWidth={1.5} />
-                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#fffdf7" />
+                                  <circle cx={tipX+22} cy={tipY} r={9} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+44} cy={tipY-6} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+68} cy={tipY-9} r={12} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+94} cy={tipY-7} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
+                                  <circle cx={tipX+118} cy={tipY-4} r={10} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} />
+                                  <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#FAF8FE" />
                                   <polygon points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`}
-                                    fill="#fffdf7" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round" />
-                                  <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#fffdf7" />
+                                    fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round" />
+                                  <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#FAF8FE" />
                                   <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8} rx={13} fill={info.color} opacity={0.15} />
                                   <text x={tipX+12} y={tipY+20} fill={info.color} fontSize={11} fontWeight="bold" fontFamily="Georgia,serif">
                                     {tarea.label||info.label}
@@ -449,8 +450,8 @@ export default function HuertaApp() {
                   {["activos","todos"].map(m=>(
                     <button key={m} onClick={()=>setLibroMode(m)} style={{
                       padding:"6px 14px", border:"none",
-                      background:libroMode===m?"#3b2f1e":"transparent",
-                      color:libroMode===m?"#f5ead8":C.textSub,
+                      background:libroMode===m?C.bgHeader:"transparent",
+                      color:libroMode===m?C.textHead:C.textSub,
                       cursor:"pointer", fontSize:12,
                       fontWeight:libroMode===m?"bold":"normal",
                       fontFamily:"Georgia,serif",
@@ -554,7 +555,7 @@ export default function HuertaApp() {
                 const mm=String(i+1).padStart(2,"0");
                 const añoTarea=editTask.fecha?.slice(0,4)||String(year);
                 const val=`${añoTarea}-${mm}`;
-                return <option key={i} value={val}>{m} {añoTarea}</option>;
+                return <option key={i} value={val}>{m}</option>;
               })}
             </select>
           </Campo>
@@ -587,7 +588,6 @@ export default function HuertaApp() {
           <Modal title={tituloModal} onClose={()=>{
             setShowAddTask(false); setRecurrente(null); setFechasExtra([""]);
           }}>
-            {/* Selector de cultivo */}
             <Campo label="Cultivo">
               <select value={newTask.cultivoId}
                 onChange={e=>{ setNewTask({...newTask,cultivoId:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={sel}>
@@ -596,9 +596,8 @@ export default function HuertaApp() {
               </select>
             </Campo>
 
-            {/* Listado de tareas existentes del cultivo */}
             {tareasDelCultivo.length>0&&(
-              <div style={{ marginBottom:14, background:"#f7f2e8",
+              <div style={{ marginBottom:14, background:"#EDE9F5",
                 border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px" }}>
                 <div style={{ fontSize:10, color:C.textMuted, fontWeight:"bold",
                   letterSpacing:"1px", textTransform:"uppercase",
@@ -617,7 +616,7 @@ export default function HuertaApp() {
                           {t.label||info.label}
                         </span>
                         <span style={{ color:C.textMuted }}>
-                          {mesLabel(t.fecha)} {t.fecha?.slice(0,4)}
+                          {mesLabel(t.fecha)}
                         </span>
                         {t.comentario&&<span style={{ color:C.textMuted, fontStyle:"italic",
                           fontSize:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -630,7 +629,6 @@ export default function HuertaApp() {
               </div>
             )}
 
-            {/* Tipo de tarea */}
             <Campo label="Tipo de tarea">
               <select value={newTask.tipo} onChange={e=>handleTipoChange(e.target.value)} style={sel}>
                 {todosLosTipos.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
@@ -641,7 +639,7 @@ export default function HuertaApp() {
               <Campo label="Nombre de la nueva tarea">
                 <input value={newTask.nombreCustom}
                   onChange={e=>setNewTask({...newTask,nombreCustom:e.target.value})}
-                  style={{...inp,borderColor:"#92660a",borderWidth:2}}
+                  style={{...inp,borderColor:"#7B5EA7",borderWidth:2}}
                   placeholder="Ej: Preparar compost, Instalar riego..." />
                 <span style={{ fontSize:11, color:C.textSub, fontFamily:"Arial,sans-serif", marginTop:3 }}>
                   💡 Quedará guardada en tu lista para usarla de nuevo
@@ -649,7 +647,6 @@ export default function HuertaApp() {
               </Campo>
             )}
 
-            {/* Mes principal */}
             <Campo label="Mes">
               <select value={newTask.fecha}
                 onChange={e=>{ setNewTask({...newTask,fecha:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={sel}>
@@ -657,12 +654,11 @@ export default function HuertaApp() {
                 {MONTHS_FULL.map((m,i)=>{
                   const mm = String(i+1).padStart(2,"0");
                   const val = `${year}-${mm}`;
-                  return <option key={i} value={val}>{m} {year}</option>;
+                  return <option key={i} value={val}>{m}</option>;
                 })}
               </select>
             </Campo>
 
-            {/* Comentario */}
             <Campo label="Comentario (opcional)">
               <textarea value={newTask.comentario}
                 onChange={e=>setNewTask({...newTask,comentario:e.target.value})}
@@ -670,9 +666,8 @@ export default function HuertaApp() {
                 placeholder="Notas sobre esta tarea..." />
             </Campo>
 
-            {/* Pregunta recurrente — solo aparece si hay fecha */}
             {newTask.fecha&&(
-              <div style={{ background:"#f0ebe0", border:`1px solid ${C.border}`,
+              <div style={{ background:"#EDE9F5", border:`1px solid ${C.border}`,
                 borderRadius:8, padding:"12px 14px", marginBottom:14 }}>
                 <div style={{ fontSize:13, color:C.textMain, fontWeight:"bold",
                   fontFamily:"Georgia,serif", marginBottom:10 }}>
@@ -683,8 +678,8 @@ export default function HuertaApp() {
                     <button key={k} onClick={()=>{ setRecurrente(val); if(!val) setFechasExtra([""]); }}
                       style={{ flex:1, padding:"8px", borderRadius:6,
                         border:`1.5px solid ${recurrente===val ? C.borderDark : C.border}`,
-                        background: recurrente===val ? "#3b2f1e" : "white",
-                        color: recurrente===val ? "#f5ead8" : C.textSub,
+                        background: recurrente===val ? C.bgHeader : "white",
+                        color: recurrente===val ? C.textHead : C.textSub,
                         cursor:"pointer", fontSize:12, fontWeight:"bold",
                         fontFamily:"Arial,sans-serif" }}>
                       {lbl}
@@ -692,7 +687,6 @@ export default function HuertaApp() {
                   ))}
                 </div>
 
-                {/* Fechas extra si es recurrente */}
                 {recurrente===true&&(
                   <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
                     <div style={{ fontSize:11, color:C.textMuted, fontFamily:"Arial,sans-serif" }}>
@@ -710,7 +704,7 @@ export default function HuertaApp() {
                           {MONTHS_FULL.map((m,j)=>{
                             const mm=String(j+1).padStart(2,"0");
                             const val=`${year}-${mm}`;
-                            return <option key={j} value={val}>{m} {year}</option>;
+                            return <option key={j} value={val}>{m}</option>;
                           })}
                         </select>
                         {fechasExtra.length>1&&(
@@ -734,7 +728,6 @@ export default function HuertaApp() {
               </div>
             )}
 
-            {/* Botones finales */}
             <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
               <button onClick={()=>{ setShowAddTask(false); setRecurrente(null); setFechasExtra([""]); }}
                 style={btnCancel}>Cancelar</button>
@@ -819,27 +812,27 @@ function TareaChip({ tarea, info, onClick }) {
           <svg width="220" height="80" viewBox="0 0 220 80"
             xmlns="http://www.w3.org/2000/svg" style={{ overflow:"visible", display:"block" }}>
             <rect x="4" y="18" width="212" height="54" rx="14"
-              fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <circle cx="30"  cy="18" r="10" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <circle cx="54"  cy="10" r="13" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <circle cx="82"  cy="6"  r="15" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <circle cx="112" cy="8"  r="13" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <circle cx="138" cy="12" r="11" fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <circle cx="162" cy="16" r="9"  fill="#fffdf7" stroke={info.color} strokeWidth="1.5" />
-            <rect x="5" y="19" width="210" height="14" fill="#fffdf7" />
+              fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <circle cx="30"  cy="18" r="10" fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <circle cx="54"  cy="10" r="13" fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <circle cx="82"  cy="6"  r="15" fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <circle cx="112" cy="8"  r="13" fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <circle cx="138" cy="12" r="11" fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <circle cx="162" cy="16" r="9"  fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" />
+            <rect x="5" y="19" width="210" height="14" fill="#FAF8FE" />
             <polygon points="102,72 118,72 110,82"
-              fill="#fffdf7" stroke={info.color} strokeWidth="1.5" strokeLinejoin="round" />
-            <rect x="103" y="70" width="14" height="5" fill="#fffdf7" />
+              fill="#FAF8FE" stroke={info.color} strokeWidth="1.5" strokeLinejoin="round" />
+            <rect x="103" y="70" width="14" height="5" fill="#FAF8FE" />
             <rect x="5" y="19" width="210" height="10" rx="12" fill={info.color} opacity="0.12" />
             <text x="14" y="38" fill={info.color} fontSize="12" fontWeight="bold" fontFamily="Georgia,serif">
               {tarea.label||info.label}
             </text>
-            <text x="206" y="38" fill="#7a6248" fontSize="10" fontFamily="Arial,sans-serif" textAnchor="end">
+            <text x="206" y="38" fill="#7B6FA0" fontSize="10" fontFamily="Arial,sans-serif" textAnchor="end">
               {mesLabel(tarea.fecha)}
             </text>
-            <line x1="14" y1="46" x2="206" y2="46" stroke="#c8b89a" strokeWidth="1" />
+            <line x1="14" y1="46" x2="206" y2="46" stroke="#C9C2E0" strokeWidth="1" />
             <text x="14" y="62"
-              fill={tarea.comentario?"#7a6248":"#a89070"}
+              fill={tarea.comentario?"#7B6FA0":"#A99DC8"}
               fontSize="10" fontFamily="Arial,sans-serif"
               fontStyle={tarea.comentario?"normal":"italic"}>
               {tarea.comentario
@@ -855,15 +848,15 @@ function TareaChip({ tarea, info, onClick }) {
 
 function Modal({ title, children, onClose }) {
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(40,25,10,0.55)",
+    <div style={{ position:"fixed", inset:0, background:"rgba(30,20,60,0.55)",
       backdropFilter:"blur(3px)", display:"flex", alignItems:"center",
       justifyContent:"center", zIndex:1000, padding:20 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:"#fffdf7", border:`1.5px solid #c8b89a`,
+      <div style={{ background:"#FAF8FE", border:`1.5px solid #C9C2E0`,
         borderRadius:10, padding:28, width:"100%", maxWidth:430,
         maxHeight:"90vh", overflowY:"auto",
         boxShadow:"0 8px 40px rgba(0,0,0,0.25)", fontFamily:"Georgia,serif" }}>
-        <h3 style={{ margin:"0 0 20px", color:"#2c1f0e", fontSize:17, fontWeight:"bold" }}>
+        <h3 style={{ margin:"0 0 20px", color:"#2E2248", fontSize:17, fontWeight:"bold" }}>
           {title}
         </h3>
         {children}
@@ -875,7 +868,7 @@ function Modal({ title, children, onClose }) {
 function Campo({ label, children }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:15 }}>
-      <span style={{ fontSize:11, color:"#7a6248", textTransform:"uppercase",
+      <span style={{ fontSize:11, color:"#7B6FA0", textTransform:"uppercase",
         letterSpacing:"1px", fontWeight:"bold", fontFamily:"Arial,sans-serif" }}>{label}</span>
       {children}
     </div>
@@ -883,18 +876,18 @@ function Campo({ label, children }) {
 }
 
 const btnNav     = { width:30, height:30, borderRadius:"50%", border:"none",
-  background:"transparent", color:"#2c1f0e", cursor:"pointer", fontSize:13, fontWeight:"bold" };
+  background:"transparent", color:"#2E2248", cursor:"pointer", fontSize:13, fontWeight:"bold" };
 const btnPrimary = { padding:"9px 22px", borderRadius:6, border:"none",
-  background:"#3b2f1e", color:"#f5ead8", cursor:"pointer", fontSize:13,
+  background:"#4A3D6B", color:"#F0EDF8", cursor:"pointer", fontSize:13,
   fontWeight:"bold", fontFamily:"Georgia,serif",
   boxShadow:"0 2px 6px rgba(0,0,0,0.2)" };
-const btnCancel  = { padding:"9px 16px", borderRadius:6, border:"1px solid #c8b89a",
-  background:"transparent", color:"#7a6248", cursor:"pointer", fontSize:13,
+const btnCancel  = { padding:"9px 16px", borderRadius:6, border:"1px solid #C9C2E0",
+  background:"transparent", color:"#7B6FA0", cursor:"pointer", fontSize:13,
   fontFamily:"Arial,sans-serif" };
 const btnDanger  = { padding:"9px 16px", borderRadius:6, border:"1.5px solid #b91c1c",
   background:"#fee2e2", color:"#b91c1c", cursor:"pointer", fontSize:13,
   fontWeight:"bold", fontFamily:"Arial,sans-serif" };
-const inp = { background:"#fffdf7", border:"1.5px solid #c8b89a", borderRadius:6,
-  padding:"9px 11px", color:"#2c1f0e", fontSize:14,
+const inp = { background:"#FAF8FE", border:"1.5px solid #C9C2E0", borderRadius:6,
+  padding:"9px 11px", color:"#2E2248", fontSize:14,
   fontFamily:"Georgia,serif", width:"100%", boxSizing:"border-box" };
 const sel = { ...inp, cursor:"pointer" };
