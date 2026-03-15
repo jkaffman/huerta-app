@@ -11,8 +11,8 @@ const TAREAS_SISTEMA = [
   { id:"fertilizar",  label:"Fertilizar",   color:"#92660a", light:"#fef3c7", abrev:"FER" },
   { id:"plagas",      label:"Ctrl. plagas", color:"#b91c1c", light:"#fee2e2", abrev:"PLA" },
   { id:"malezas",     label:"Malezas",      color:"#6b21a8", light:"#f3e8ff", abrev:"MAL" },
-  { id:"podar",       label:"Podar",        color:"#c2410c", light:"#ffedd5", abrev:"POD" },
-  { id:"cosechar",    label:"Cosechar",     color:"#b45309", light:"#fef3c7", abrev:"COS" },
+  { id:"podar",       label:"Podar",        color:"#ca8a04", light:"#fefce8", abrev:"POD" },
+  { id:"cosechar",    label:"Cosechar",     color:"#ea580c", light:"#fff7ed", abrev:"COS" },
 ];
 
 const MONTHS   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
