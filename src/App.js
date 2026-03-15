@@ -341,33 +341,44 @@ export default function HuertaApp() {
 
                       {tareasDe(c.id).map(tarea=>{
                         const info=getTipoInfo(tarea.tipo,tarea.label,tareasCustom);
-                        const tx=taskX(tarea.fecha);
+                        const m=parseInt(tarea.fecha?.slice(5,7)||"1",10)-1;
+                        const barX=monthX(m)+6;
+                        const barW=COL_W-12;
+                        const barH=28;
                         const cy=y0+ROW_H/2;
+                        const barY=cy-barH/2;
                         const isHov=hoveredTask===tarea.id;
-                        const abrev=info.abrev||(tarea.label||"").slice(0,3).toUpperCase();
+                        // tx still needed for tooltip positioning
+                        const tx=monthX(m)+COL_W/2;
                         return (
                           <g key={tarea.id} style={{ cursor:"pointer" }}
                             onMouseEnter={()=>setHoveredTask(tarea.id)}
                             onMouseLeave={()=>setHoveredTask(null)}
                             onClick={()=>setEditTask({...tarea})}>
-                            <circle cx={tx+1} cy={cy+2} r={TASK_R}
-                              fill="rgba(0,0,0,0.10)" />
-                            <circle cx={tx} cy={cy} r={isHov?TASK_R+2:TASK_R}
-                              fill={info.light} stroke={info.color}
-                              strokeWidth={isHov?3:2} />
+                            {/* Sombra */}
+                            <rect x={barX+2} y={barY+3} width={barW} height={barH}
+                              rx={barH/2} fill="rgba(0,0,0,0.10)" />
+                            {/* Barra principal */}
+                            <rect x={barX} y={barY} width={barW} height={barH}
+                              rx={barH/2}
+                              fill={info.color}
+                              opacity={isHov?1:0.88}
+                              stroke={isHov?"white":"none"}
+                              strokeWidth={isHov?1.5:0} />
+                            {/* Texto abreviación */}
                             <text x={tx} y={cy+5} textAnchor="middle"
-                              fontSize={10} fontWeight="bold"
+                              fontSize={11} fontWeight="bold"
                               fontFamily="Arial,sans-serif"
-                              fill={info.color}>{abrev}</text>
+                              fill="white">{info.abrev||(tarea.label||"").slice(0,3).toUpperCase()}</text>
                             {tarea.comentario&&(
-                              <circle cx={tx+13} cy={cy-13} r={5}
+                              <circle cx={barX+barW-4} cy={barY+4} r={5}
                                 fill="#e67e22" stroke="white" strokeWidth={1.5} />
                             )}
                             {/* Nube tooltip Gantt */}
                             {isHov&&(()=>{
                               const tipW=200, tipH=58;
                               const tipX=Math.min(Math.max(tx-tipW/2,LABEL_W+4),svgW-tipW-6);
-                              const tipY=Math.max(6,cy-TASK_R-tipH-14);
+                              const tipY=Math.max(6,barY-tipH-14);
                               const tailX=Math.min(Math.max(tx,tipX+20),tipX+tipW-20);
                               return (
                                 <g style={{ pointerEvents:"none" }}>
