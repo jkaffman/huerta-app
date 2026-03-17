@@ -32,9 +32,10 @@ function mesX(fecha, labelW, colW) {
 }
 // Dimensiones base (desktop). En móvil se escalan con un factor
 const COL_W_BASE    = 90;
-const ROW_H_BASE    = 38;
+const ROW_H_BASE    = 58;
 const LABEL_W_BASE  = 170;
-const HEADER_H_BASE = 36;
+const HEADER_H_BASE = 42;
+const TASK_R   = 16;
 
 function getGanttScale() {
   if (typeof window === "undefined") return 1;
@@ -356,16 +357,22 @@ export default function HuertaApp() {
                         fill={isEven?C.bgLabel1:C.bgLabel2} />
                       <line x1={0} y1={y0+ROW_H} x2={svgW} y2={y0+ROW_H}
                         stroke={C.border} strokeWidth={1} />
-                      <rect x={0} y={y0+6} width={3} height={ROW_H-12} rx={1.5}
+                      <rect x={0} y={y0+8} width={4} height={ROW_H-16} rx={2}
                         fill={c.activo?C.accent:C.textMuted} />
-                      <text x={10} y={y0+ROW_H/2+5}
+                      <text x={14} y={y0+ROW_H/2-4}
                         fill={c.activo?C.textMain:C.textMuted}
-                        fontSize={Math.round(12*sc)} fontWeight="bold" fontFamily="Georgia,serif"
+                        fontSize={Math.round(14*sc)} fontWeight="bold" fontFamily="Georgia,serif"
                         fontStyle={c.activo?"normal":"italic"}>{c.nombre}</text>
+                      {/* Ubicación sin año */}
+                      <text x={14} y={y0+ROW_H/2+13} fill={C.textSub}
+                        fontSize={Math.round(10*sc)} fontFamily="Arial,sans-serif">
+                        {c.ubicacion||""}
+                        {!c.activo?"  ·  inactivo":""}
+                      </text>
 
                       {/* AGRUPADO POR MES - barras divididas */}
                       {(()=>{
-                        const barH=Math.round(ROW_H*0.55), cy=y0+ROW_H/2, barY=cy-barH/2, R=3;
+                        const barH=28, cy=y0+ROW_H/2, barY=cy-barH/2, R=barH/2;
                         const porMes={};
                         tareasDe(c.id).forEach(t=>{
                           const m=parseInt(t.fecha?.slice(5,7)||"1",10)-1;
@@ -374,15 +381,15 @@ export default function HuertaApp() {
                         });
                         return Object.entries(porMes).map(([mStr,tareasEnMes])=>{
                           const m=parseInt(mStr);
-                          const barX=monthX(m)+4;
-                          const barW=COL_W-8;
+                          const barX=monthX(m)+6;
+                          const barW=COL_W-12;
                           const n=tareasEnMes.length;
                           const secW=barW/n;
                           const clipId=`cl-${c.id}-${m}`;
                           return (
                             <g key={`m${m}`}>
                               <defs><clipPath id={clipId}><rect x={barX} y={barY} width={barW} height={barH} rx={R}/></clipPath></defs>
-                              <rect x={barX+1} y={barY+2} width={barW} height={barH} rx={R} fill="rgba(0,0,0,0.08)"/>
+                              <rect x={barX+2} y={barY+3} width={barW} height={barH} rx={R} fill="rgba(0,0,0,0.10)"/>
                               {tareasEnMes.map((tarea,idx)=>{
                                 const info=getTipoInfo(tarea.tipo,tarea.label,tareasCustom);
                                 const secX=barX+idx*secW;
