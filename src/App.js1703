@@ -30,21 +30,11 @@ function mesX(fecha, labelW, colW) {
   const m = parseInt(fecha.slice(5,7),10)-1;
   return labelW + m*colW + colW/2;
 }
-// Dimensiones base (desktop). En móvil se escalan con un factor
-const COL_W_BASE    = 90;
-const ROW_H_BASE    = 58;
-const LABEL_W_BASE  = 170;
-const HEADER_H_BASE = 42;
+const COL_W    = 90;
+const ROW_H    = 58;
+const LABEL_W  = 170;
+const HEADER_H = 42;
 const TASK_R   = 16;
-
-function getGanttScale() {
-  if (typeof window === "undefined") return 1;
-  const w = window.innerWidth;
-  if (w < 480) return 0.45;
-  if (w < 640) return 0.58;
-  if (w < 900) return 0.75;
-  return 1;
-}
 
 // ── Paleta lila / naturalista ──
 const C = {
@@ -95,18 +85,6 @@ export default function HuertaApp() {
   const [recurrente,    setRecurrente]    = useState(null);
   const [fechasExtra,   setFechasExtra]   = useState([""]);
   const [newCult, setNewCult] = useState({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
-  const [sortOrder,  setSortOrder]  = useState("none"); // "none" | "az" | "za"
-  const [ganttScale, setGanttScale] = useState(getGanttScale);
-  useEffect(()=>{
-    const fn = ()=>setGanttScale(getGanttScale());
-    window.addEventListener("resize", fn);
-    return ()=>window.removeEventListener("resize", fn);
-  },[]);
-  const sc = ganttScale;
-  const COL_W    = Math.round(COL_W_BASE    * sc);
-  const ROW_H    = Math.round(ROW_H_BASE    * sc);
-  const LABEL_W  = Math.round(LABEL_W_BASE  * sc);
-  const HEADER_H = Math.round(HEADER_H_BASE * sc);
 
   // ── Cargar datos de Firebase ──
   useEffect(() => {
@@ -191,13 +169,8 @@ export default function HuertaApp() {
     setEditTask(null);
   }
 
-  function sortCultivos(arr) {
-    if (sortOrder==="az") return [...arr].sort((a,b)=>a.nombre.localeCompare(b.nombre));
-    if (sortOrder==="za") return [...arr].sort((a,b)=>b.nombre.localeCompare(a.nombre));
-    return arr;
-  }
-  const cultivosFiltrados = sortCultivos(ganttMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos);
-  const cultivosLibro = sortCultivos(libroMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos);
+  const cultivosFiltrados = ganttMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos;
+  const cultivosLibro = libroMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos;
 
   function monthX(i) { return LABEL_W + i*COL_W; }
   function taskX(fecha) {
@@ -283,19 +256,6 @@ export default function HuertaApp() {
                     }}>{m==="activos"?"Solo activos":"Todos"}</button>
                   ))}
                 </div>
-                <div style={{ display:"flex", background:C.bgCard,
-                  border:`1px solid ${C.border}`, borderRadius:6, overflow:"hidden" }}>
-                  {[["none","A·Z"],["az","A→Z"],["za","Z→A"]].map(([val,lbl])=>(
-                    <button key={val} onClick={()=>setSortOrder(val)} style={{
-                      padding:"7px 12px", border:"none",
-                      background:sortOrder===val?C.bgHeader:"transparent",
-                      color:sortOrder===val?C.textHead:C.textSub,
-                      cursor:"pointer", fontSize:11,
-                      fontWeight:sortOrder===val?"bold":"normal",
-                      fontFamily:"Arial,sans-serif",
-                    }}>{lbl}</button>
-                  ))}
-                </div>
               </div>
               <button onClick={()=>setShowAddTask(true)} style={btnPrimary}>
                 + Nueva Tarea
@@ -340,7 +300,7 @@ export default function HuertaApp() {
                     {/* Solo mes, sin año */}
                     <text x={monthX(i)+COL_W/2} y={HEADER_H/2+6}
                       textAnchor="middle" fill={C.monthText}
-                      fontSize={Math.round(13*sc)} fontWeight="bold" fontFamily="Georgia,serif">{m}</text>
+                      fontSize={13} fontWeight="bold" fontFamily="Georgia,serif">{m}</text>
                   </g>
                 ))}
                 <line x1={monthX(12)} y1={0} x2={monthX(12)} y2={svgH}
@@ -361,11 +321,11 @@ export default function HuertaApp() {
                         fill={c.activo?C.accent:C.textMuted} />
                       <text x={14} y={y0+ROW_H/2-4}
                         fill={c.activo?C.textMain:C.textMuted}
-                        fontSize={Math.round(14*sc)} fontWeight="bold" fontFamily="Georgia,serif"
+                        fontSize={14} fontWeight="bold" fontFamily="Georgia,serif"
                         fontStyle={c.activo?"normal":"italic"}>{c.nombre}</text>
                       {/* Ubicación sin año */}
                       <text x={14} y={y0+ROW_H/2+13} fill={C.textSub}
-                        fontSize={Math.round(10*sc)} fontFamily="Arial,sans-serif">
+                        fontSize={10} fontFamily="Arial,sans-serif">
                         {c.ubicacion||""}
                         {!c.activo?"  ·  inactivo":""}
                       </text>
@@ -399,7 +359,7 @@ export default function HuertaApp() {
                                   <g key={tarea.id}>
                                     <rect x={secX} y={barY} width={secW} height={barH} fill={info.color} opacity={isHov?1:0.88} clipPath={`url(#${clipId})`}/>
                                     {idx>0&&<line x1={secX} y1={barY+3} x2={secX} y2={barY+barH-3} stroke="white" strokeWidth={1.5} opacity={0.5}/>}
-                                    <text x={txSec} y={cy+5} textAnchor="middle" fontSize={secW>32?Math.round(11*sc):Math.round(9*sc)} fontWeight="bold" fontFamily="Arial,sans-serif" fill="white" clipPath={`url(#${clipId})`}>
+                                    <text x={txSec} y={cy+5} textAnchor="middle" fontSize={secW>32?11:9} fontWeight="bold" fontFamily="Arial,sans-serif" fill="white" clipPath={`url(#${clipId})`}>
                                       {info.abrev||(tarea.label||"").slice(0,3).toUpperCase()}
                                     </text>
                                     {tarea.comentario&&<circle cx={secX+secW-5} cy={barY+5} r={4} fill="#e67e22" stroke="white" strokeWidth={1.5}/>}
@@ -493,19 +453,6 @@ export default function HuertaApp() {
                     }}>{m==="activos"?"Solo activos":"Todos"}</button>
                   ))}
                 </div>
-                <div style={{ display:"flex", background:C.bgCard,
-                  border:`1px solid ${C.border}`, borderRadius:6, overflow:"hidden" }}>
-                  {[["none","A·Z"],["az","A→Z"],["za","Z→A"]].map(([val,lbl])=>(
-                    <button key={val} onClick={()=>setSortOrder(val)} style={{
-                      padding:"6px 10px", border:"none",
-                      background:sortOrder===val?C.bgHeader:"transparent",
-                      color:sortOrder===val?C.textHead:C.textSub,
-                      cursor:"pointer", fontSize:11,
-                      fontWeight:sortOrder===val?"bold":"normal",
-                      fontFamily:"Arial,sans-serif",
-                    }}>{lbl}</button>
-                  ))}
-                </div>
               </div>
               <button onClick={()=>setShowAddCultivo(true)} style={btnPrimary}>
                 + Nuevo Cultivo
@@ -543,41 +490,21 @@ export default function HuertaApp() {
                         {c.activo?"✓ Activo":"Inactivo"}
                       </button>
                     </div>
-                    <div style={{ marginTop:14, borderTop:`1px solid ${C.border}`, paddingTop:12 }}>
-                      {tareasC.length===0
-                        ? <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic", fontFamily:"Arial,sans-serif" }}>Sin tareas registradas</div>
-                        : (()=>{
-                            const grupos={};
-                            tareasC.forEach(t=>{
-                              const info=getTipoInfo(t.tipo,t.label,tareasCustom);
-                              const key=t.tipo+"|"+(t.label||info.label);
-                              if(!grupos[key]) grupos[key]={ info, label:t.label||info.label, meses:[], tareas:[] };
-                              grupos[key].meses.push(parseInt(t.fecha?.slice(5,7)||"1",10)-1);
-                              grupos[key].tareas.push(t);
-                            });
-                            return Object.values(grupos).map((g,gi)=>(
-                              <div key={gi} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:9 }}>
-                                <div style={{ width:10, height:10, borderRadius:"50%", background:g.info.color, flexShrink:0, marginTop:4 }}/>
-                                <div style={{ flex:1 }}>
-                                  <span style={{ fontSize:13, fontWeight:"bold", color:g.info.color, fontFamily:"Georgia,serif" }}>
-                                    {g.label}
-                                  </span>
-                                  <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:4 }}>
-                                    {g.meses.sort((a,b)=>a-b).map((m,mi)=>(
-                                      <span key={mi} onClick={()=>setEditTask({...g.tareas[mi]})}
-                                        style={{ fontSize:11, padding:"2px 9px", borderRadius:12,
-                                          background:g.info.color+"18", color:g.info.color,
-                                          border:`1px solid ${g.info.color}44`,
-                                          cursor:"pointer", fontFamily:"Arial,sans-serif", fontWeight:"bold" }}>
-                                        {MONTHS[m]}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            ));
-                          })()
-                      }
+                    <div style={{ marginTop:14, borderTop:`1px solid ${C.border}`,
+                      paddingTop:12 }}>
+                      <div style={{ fontSize:11, color:C.textMuted, marginBottom:8,
+                        fontFamily:"Arial,sans-serif" }}>
+                        {tareasC.length} tarea{tareasC.length!==1?"s":""} registradas
+                      </div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                        {tareasC.slice(0,8).map(t=>{
+                          const info=getTipoInfo(t.tipo,t.label,tareasCustom);
+                          return (
+                            <TareaChip key={t.id} tarea={t} info={info}
+                              onClick={()=>setEditTask({...t})} />
+                          );
+                        })}
+                      </div>
                     </div>
                     <button onClick={()=>{
                       setNewTask(t=>({...t,cultivoId:c.id}));
