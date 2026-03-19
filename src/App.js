@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase";
 import {
-  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc
+  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc
 } from "firebase/firestore";
 
 const TAREAS_SISTEMA = [
@@ -69,11 +69,17 @@ function colorParaPersonalizada(label) {
   return { ...colores[idx], abrev: label.slice(0,3).toUpperCase() };
 }
 
-function getTipoInfo(tipo, label, tareasCustom) {
+function getTipoInfo(tipo, label, tareasCustom, coloresCustom={}) {
   const sistema = TAREAS_SISTEMA.find(t => t.id === tipo);
-  if (sistema) return sistema;
+  if (sistema) {
+    const colorOverride = coloresCustom[tipo];
+    return colorOverride ? { ...sistema, color:colorOverride } : sistema;
+  }
   const custom = tareasCustom.find(t => t.id === tipo);
-  if (custom) return custom;
+  if (custom) {
+    const colorOverride = coloresCustom[tipo];
+    return colorOverride ? { ...custom, color:colorOverride } : custom;
+  }
   return { color:"#4b5563", light:"#f3f4f6", abrev:(label||"OTR").slice(0,3).toUpperCase() };
 }
 
@@ -96,6 +102,7 @@ export default function HuertaApp() {
   const [newCult, setNewCult] = useState({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
   const [sortOrder,  setSortOrder]  = useState("none"); // "none" | "az" | "za"
   const [ganttScale, setGanttScale] = useState(getGanttScale);
+  const [coloresCustom, setColoresCustom] = useState({}); // { tipoId: "#hexcolor" }
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -119,8 +126,21 @@ export default function HuertaApp() {
     const u3 = onSnapshot(collection(db,"tiposCustom"), s => {
       setTareasCustom(s.docs.map(d => ({ id:d.id, ...d.data() })));
     });
-    return () => { u1(); u2(); u3(); };
+    const u4 = onSnapshot(collection(db,"coloresCustom"), s => {
+      const obj = {};
+      s.docs.forEach(d => { obj[d.id] = d.data().color; });
+      setColoresCustom(obj);
+    });
+    return () => { u1(); u2(); u3(); u4(); };
   }, []);
+
+  async function cambiarColor(tipoId, nuevoColor) {
+    await setDoc(doc(db,"coloresCustom",tipoId), { color:nuevoColor });
+  }
+
+  function getColor(tipo) {
+    return coloresCustom[tipo] || null;
+  }
 
   const todosLosTipos = [...TAREAS_SISTEMA, ...tareasCustom];
 
@@ -303,15 +323,28 @@ export default function HuertaApp() {
 
             {/* Leyenda */}
             <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:16 }}>
-              {todosLosTipos.map(t=>(
-                <div key={t.id} style={{
-                  display:"flex", alignItems:"center", gap:5,
-                  background:t.color, border:`1px solid ${t.color}`,
-                  borderRadius:20, padding:"3px 10px" }}>
-                  <span style={{ fontSize:11, color:"white",
-                    fontWeight:"bold", fontFamily:"Arial,sans-serif" }}>{t.label}</span>
-                </div>
-              ))}
+              {todosLosTipos.map(t=>{
+                const colorActual = coloresCustom[t.id] || t.color;
+                return (
+                  <div key={t.id} style={{
+                    display:"flex", alignItems:"center", gap:0,
+                    background:colorActual, border:`1px solid ${colorActual}`,
+                    borderRadius:20, overflow:"hidden" }}>
+                    <span style={{ fontSize:11, color:"white", fontWeight:"bold",
+                      fontFamily:"Arial,sans-serif", padding:"3px 8px 3px 10px" }}>{t.label}</span>
+                    <label title="Cambiar color" style={{
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      padding:"0 6px 0 2px", cursor:"pointer", opacity:0.85,
+                      fontSize:11, color:"white" }}>
+                      🎨
+                      <input type="color" value={colorActual}
+                        onChange={e=>cambiarColor(t.id,e.target.value)}
+                        style={{ width:0, height:0, padding:0, border:"none",
+                          opacity:0, position:"absolute" }} />
+                    </label>
+                  </div>
+                );
+              })}
             </div>
 
             {/* SVG Gantt — cabecera muestra solo mes, sin año */}
@@ -364,68 +397,123 @@ export default function HuertaApp() {
 
                       {/* AGRUPADO POR MES - barras divididas */}
                       {(()=>{
-                        const barH=Math.round(ROW_H*0.55), cy=y0+ROW_H/2, barY=cy-barH/2, R=3;
-                        const porMes={};
-                        tareasDe(c.id).forEach(t=>{
-                          const m=parseInt(t.fecha?.slice(5,7)||"1",10)-1;
-                          if(!porMes[m]) porMes[m]=[];
-                          porMes[m].push(t);
+                        // ── Lógica de barras: fusión + apilado vertical ──
+                        const todasTareas = tareasDe(c.id);
+
+                        // 1. Agrupar por tipo para detectar meses consecutivos
+                        const porTipo = {};
+                        todasTareas.forEach(t => {
+                          const m = parseInt(t.fecha?.slice(5,7)||"1",10)-1;
+                          if (!porTipo[t.tipo]) porTipo[t.tipo] = [];
+                          porTipo[t.tipo].push({ ...t, m });
                         });
-                        return Object.entries(porMes).map(([mStr,tareasEnMes])=>{
-                          const m=parseInt(mStr);
-                          const barX=monthX(m)+4;
-                          const barW=COL_W-8;
-                          const n=tareasEnMes.length;
-                          const secW=barW/n;
-                          const clipId=`cl-${c.id}-${m}`;
+
+                        // 2. Para cada tipo, encontrar grupos de meses consecutivos
+                        const segmentos = []; // { tipo, label, meses:[{m,tarea}], mInicio, mFin }
+                        Object.entries(porTipo).forEach(([tipo, items]) => {
+                          const sorted = [...items].sort((a,b)=>a.m-b.m);
+                          let grupo = [sorted[0]];
+                          for (let i=1; i<sorted.length; i++) {
+                            if (sorted[i].m === grupo[grupo.length-1].m+1) {
+                              grupo.push(sorted[i]);
+                            } else {
+                              segmentos.push({ tipo, meses:grupo, mInicio:grupo[0].m, mFin:grupo[grupo.length-1].m });
+                              grupo = [sorted[i]];
+                            }
+                          }
+                          segmentos.push({ tipo, meses:grupo, mInicio:grupo[0].m, mFin:grupo[grupo.length-1].m });
+                        });
+
+                        // 3. Para cada mes, contar cuántos segmentos distintos pasan por él
+                        // (para calcular el alto de cada barra apilada)
+                        const segPorMes = {}; // mes -> [segmentos]
+                        segmentos.forEach(seg => {
+                          for (let m=seg.mInicio; m<=seg.mFin; m++) {
+                            if (!segPorMes[m]) segPorMes[m] = [];
+                            segPorMes[m].push(seg);
+                          }
+                        });
+
+                        // 4. Dibujar cada segmento
+                        const barHBase = Math.round(ROW_H*0.55);
+                        const cy = y0+ROW_H/2;
+                        const R = 3;
+
+                        return segmentos.map((seg, segIdx) => {
+                          const info = getTipoInfo(seg.tipo, seg.meses[0].label, tareasCustom, coloresCustom);
+                          // La barra arranca en el inicio del mes mInicio y termina al final del mFin
+                          const barX = monthX(seg.mInicio)+4;
+                          const barW = (seg.mFin - seg.mInicio + 1) * COL_W - 8;
+
+                          // Calcular posición vertical: ¿cuántas barras hay en cada mes de este segmento?
+                          // Usamos el máximo de barras en cualquier mes del segmento para decidir altura
+                          let maxStack = 1;
+                          let stackIdx = 0;
+                          for (let m=seg.mInicio; m<=seg.mFin; m++) {
+                            const segsEnMes = segPorMes[m] || [];
+                            maxStack = Math.max(maxStack, segsEnMes.length);
+                            // El índice de este segmento en el mes mInicio define su posición vertical
+                            if (m === seg.mInicio) {
+                              stackIdx = segsEnMes.indexOf(seg);
+                            }
+                          }
+
+                          // Altura de barra según cuántas se apilan
+                          const barH = maxStack > 1 ? Math.round(barHBase / maxStack * 0.9) : barHBase;
+                          const gap = maxStack > 1 ? 2 : 0;
+                          const totalH = maxStack * barH + (maxStack-1) * gap;
+                          const barY = cy - totalH/2 + stackIdx*(barH+gap);
+
+                          // Clippath único por segmento
+                          const clipId = `cl-${c.id}-${segIdx}`;
+                          // Tarea representativa (primera del segmento, para tooltip y click)
+                          const tareaRep = seg.meses[0];
+                          const isHov = hoveredTask === `seg-${c.id}-${segIdx}`;
+                          const txSec = barX + barW/2;
+
                           return (
-                            <g key={`m${m}`}>
+                            <g key={`seg${segIdx}`}>
                               <defs><clipPath id={clipId}><rect x={barX} y={barY} width={barW} height={barH} rx={R}/></clipPath></defs>
                               <rect x={barX+1} y={barY+2} width={barW} height={barH} rx={R} fill="rgba(0,0,0,0.08)"/>
-                              {tareasEnMes.map((tarea,idx)=>{
-                                const info=getTipoInfo(tarea.tipo,tarea.label,tareasCustom);
-                                const secX=barX+idx*secW;
-                                const txSec=secX+secW/2;
-                                const isHov=hoveredTask===tarea.id;
+                              <rect x={barX} y={barY} width={barW} height={barH} rx={R}
+                                fill={info.color} opacity={isHov?1:0.88}/>
+                              {tareaRep.comentario&&<circle cx={barX+barW-6} cy={barY+5} r={4} fill="#e67e22" stroke="white" strokeWidth={1.5}/>}
+                              <rect x={barX} y={barY} width={barW} height={barH} fill="transparent"
+                                style={{cursor:"pointer"}}
+                                onMouseEnter={()=>setHoveredTask(`seg-${c.id}-${segIdx}`)}
+                                onMouseLeave={()=>setHoveredTask(null)}
+                                onClick={()=>setEditTask({...tareaRep})}/>
+                              {isHov&&(()=>{
+                                const tipW=200,tipH=58;
+                                const tipX=Math.min(Math.max(txSec-tipW/2,LABEL_W+4),svgW-tipW-6);
+                                const tipY=Math.max(6,barY-tipH-14);
+                                const tailX=Math.min(Math.max(txSec,tipX+20),tipX+tipW-20);
+                                // Label de rango si hay varios meses
+                                const rangoLabel = seg.meses.length > 1
+                                  ? `${mesLabel(seg.meses[0].fecha)} – ${mesLabel(seg.meses[seg.meses.length-1].fecha)}`
+                                  : mesLabel(tareaRep.fecha);
                                 return (
-                                  <g key={tarea.id}>
-                                    <rect x={secX} y={barY} width={secW} height={barH} fill={info.color} opacity={isHov?1:0.88} clipPath={`url(#${clipId})`}/>
-                                    {idx>0&&<line x1={secX} y1={barY+3} x2={secX} y2={barY+barH-3} stroke="white" strokeWidth={1.5} opacity={0.5}/>}
-                                    {tarea.comentario&&<circle cx={secX+secW-5} cy={barY+5} r={4} fill="#e67e22" stroke="white" strokeWidth={1.5}/>}
-                                    <rect x={secX} y={barY} width={secW} height={barH} fill="transparent" clipPath={`url(#${clipId})`} style={{cursor:"pointer"}}
-                                      onMouseEnter={()=>setHoveredTask(tarea.id)}
-                                      onMouseLeave={()=>setHoveredTask(null)}
-                                      onClick={()=>setEditTask({...tarea})}/>
-                                    {isHov&&(()=>{
-                                      const tipW=200,tipH=58;
-                                      const tipX=Math.min(Math.max(txSec-tipW/2,LABEL_W+4),svgW-tipW-6);
-                                      const tipY=Math.max(6,barY-tipH-14);
-                                      const tailX=Math.min(Math.max(txSec,tipX+20),tipX+tipW-20);
-                                      return (
-                                        <g style={{pointerEvents:"none"}}>
-                                          <rect x={tipX+3} y={tipY+3} width={tipW} height={tipH} rx={14} fill="rgba(0,0,0,0.10)"/>
-                                          <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={14} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
-                                          <circle cx={tipX+22} cy={tipY} r={9} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
-                                          <circle cx={tipX+44} cy={tipY-6} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
-                                          <circle cx={tipX+68} cy={tipY-9} r={12} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
-                                          <circle cx={tipX+94} cy={tipY-7} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
-                                          <circle cx={tipX+118} cy={tipY-4} r={10} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
-                                          <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#FAF8FE"/>
-                                          <polygon points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round"/>
-                                          <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#FAF8FE"/>
-                                          <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8} rx={13} fill={info.color} opacity={0.15}/>
-                                          <text x={tipX+12} y={tipY+20} fill={info.color} fontSize={11} fontWeight="bold" fontFamily="Georgia,serif">{tarea.label||info.label}</text>
-                                          <text x={tipX+tipW-12} y={tipY+20} fill={C.textSub} fontSize={10} fontFamily="Arial,sans-serif" textAnchor="end">{mesLabel(tarea.fecha)}</text>
-                                          <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28} stroke={C.border} strokeWidth={1}/>
-                                          <text x={tipX+12} y={tipY+44} fill={tarea.comentario?C.textSub:C.textMuted} fontSize={10} fontFamily="Arial,sans-serif" fontStyle={tarea.comentario?"normal":"italic"}>
-                                            {tarea.comentario?tarea.comentario.slice(0,34)+(tarea.comentario.length>34?"…":""):"Sin comentario · clic para editar"}
-                                          </text>
-                                        </g>
-                                      );
-                                    })()}
+                                  <g style={{pointerEvents:"none"}}>
+                                    <rect x={tipX+3} y={tipY+3} width={tipW} height={tipH} rx={14} fill="rgba(0,0,0,0.10)"/>
+                                    <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={14} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                    <circle cx={tipX+22} cy={tipY} r={9} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                    <circle cx={tipX+44} cy={tipY-6} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                    <circle cx={tipX+68} cy={tipY-9} r={12} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                    <circle cx={tipX+94} cy={tipY-7} r={11} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                    <circle cx={tipX+118} cy={tipY-4} r={10} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5}/>
+                                    <rect x={tipX+1} y={tipY+1} width={tipW-2} height={16} fill="#FAF8FE"/>
+                                    <polygon points={`${tailX-8},${tipY+tipH} ${tailX+8},${tipY+tipH} ${tailX},${tipY+tipH+12}`} fill="#FAF8FE" stroke={info.color} strokeWidth={1.5} strokeLinejoin="round"/>
+                                    <rect x={tailX-7} y={tipY+tipH-2} width={14} height={5} fill="#FAF8FE"/>
+                                    <rect x={tipX+1} y={tipY+1} width={tipW-2} height={8} rx={13} fill={info.color} opacity={0.15}/>
+                                    <text x={tipX+12} y={tipY+20} fill={info.color} fontSize={11} fontWeight="bold" fontFamily="Georgia,serif">{tareaRep.label||info.label}</text>
+                                    <text x={tipX+tipW-12} y={tipY+20} fill={C.textSub} fontSize={10} fontFamily="Arial,sans-serif" textAnchor="end">{rangoLabel}</text>
+                                    <line x1={tipX+10} y1={tipY+28} x2={tipX+tipW-10} y2={tipY+28} stroke={C.border} strokeWidth={1}/>
+                                    <text x={tipX+12} y={tipY+44} fill={tareaRep.comentario?C.textSub:C.textMuted} fontSize={10} fontFamily="Arial,sans-serif" fontStyle={tareaRep.comentario?"normal":"italic"}>
+                                      {tareaRep.comentario?tareaRep.comentario.slice(0,34)+(tareaRep.comentario.length>34?"…":""):"Sin comentario · clic para editar"}
+                                    </text>
                                   </g>
                                 );
-                              })}
+                              })()}
                             </g>
                           );
                         });
@@ -538,7 +626,7 @@ export default function HuertaApp() {
                         : (()=>{
                             const grupos={};
                             tareasC.forEach(t=>{
-                              const info=getTipoInfo(t.tipo,t.label,tareasCustom);
+                              const info=getTipoInfo(t.tipo,t.label,tareasCustom,coloresCustom);
                               const key=t.tipo+"|"+(t.label||info.label);
                               if(!grupos[key]) grupos[key]={ info, label:t.label||info.label, meses:[], tareas:[] };
                               grupos[key].meses.push(parseInt(t.fecha?.slice(5,7)||"1",10)-1);
@@ -663,7 +751,7 @@ export default function HuertaApp() {
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:5, maxHeight:130, overflowY:"auto" }}>
                   {tareasDelCultivo.map(t=>{
-                    const info=getTipoInfo(t.tipo,t.label,tareasCustom);
+                    const info=getTipoInfo(t.tipo,t.label,tareasCustom,coloresCustom);
                     return (
                       <div key={t.id} style={{ display:"flex", alignItems:"center",
                         gap:8, fontSize:12, fontFamily:"Arial,sans-serif" }}>
