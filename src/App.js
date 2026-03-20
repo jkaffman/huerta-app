@@ -103,6 +103,7 @@ export default function HuertaApp() {
   const [sortOrder,  setSortOrder]  = useState("none"); // "none" | "az" | "za"
   const [ganttScale, setGanttScale] = useState(getGanttScale);
   const [coloresCustom, setColoresCustom] = useState({}); // { tipoId: "#hexcolor" }
+  const [menuTipo, setMenuTipo] = useState(null); // id del tipo con menú abierto
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -144,6 +145,18 @@ export default function HuertaApp() {
 
   async function cambiarColor(tipoId, nuevoColor) {
     await setDoc(doc(db,"coloresCustom",tipoId), { color:nuevoColor });
+  }
+
+  async function eliminarTipoCustom(tipoId, tipoLabel) {
+    if (!window.confirm(`¿Eliminar el tipo "${tipoLabel}"? También se eliminarán todas las tareas de este tipo.`)) return;
+    // Eliminar el tipo de tiposCustom
+    await deleteDoc(doc(db,"tiposCustom",tipoId));
+    // Eliminar todas las tareas que usan este tipo
+    const tareasDelTipo = tareas.filter(t=>t.tipo===tipoId);
+    for (const t of tareasDelTipo) await deleteDoc(doc(db,"tareas",t.id));
+    // Eliminar color personalizado si existe
+    await deleteDoc(doc(db,"coloresCustom",tipoId)).catch(()=>{});
+    setMenuTipo(null);
   }
 
   function getColor(tipo) {
@@ -338,23 +351,62 @@ export default function HuertaApp() {
             <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:16 }}>
               {todosLosTipos.map(t=>{
                 const colorActual = coloresCustom[t.id] || t.color;
+                const esCustom = tareasCustom.some(tc=>tc.id===t.id);
+                const menuAbierto = menuTipo===t.id;
                 return (
-                  <div key={t.id} style={{
-                    display:"flex", alignItems:"center", gap:0,
-                    background:colorActual, border:`1px solid ${colorActual}`,
-                    borderRadius:20, overflow:"hidden" }}>
-                    <span style={{ fontSize:11, color:"white", fontWeight:"bold",
-                      fontFamily:"Arial,sans-serif", padding:"3px 8px 3px 10px" }}>{t.label}</span>
-                    <label title="Cambiar color" style={{
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      padding:"0 6px 0 2px", cursor:"pointer", opacity:0.85,
-                      fontSize:13, color:"white", letterSpacing:1 }}>
-                      ···
-                      <input type="color" value={colorActual}
-                        onChange={e=>cambiarColor(t.id,e.target.value)}
-                        style={{ width:0, height:0, padding:0, border:"none",
-                          opacity:0, position:"absolute" }} />
-                    </label>
+                  <div key={t.id} style={{ position:"relative" }}>
+                    <div style={{
+                      display:"flex", alignItems:"center", gap:0,
+                      background:colorActual, border:`1px solid ${colorActual}`,
+                      borderRadius:20, overflow:"visible" }}>
+                      <span style={{ fontSize:11, color:"white", fontWeight:"bold",
+                        fontFamily:"Arial,sans-serif", padding:"3px 8px 3px 10px" }}>{t.label}</span>
+                      <button
+                        onClick={()=>setMenuTipo(menuAbierto?null:t.id)}
+                        style={{ display:"flex", alignItems:"center", justifyContent:"center",
+                          padding:"0 8px 0 2px", cursor:"pointer", background:"transparent",
+                          border:"none", fontSize:13, color:"white", letterSpacing:1,
+                          lineHeight:1, height:"100%" }}>
+                        ···
+                      </button>
+                    </div>
+                    {menuAbierto&&(
+                      <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0,
+                        background:"#FAF8FE", border:`1.5px solid ${C.border}`,
+                        borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+                        zIndex:300, minWidth:170, overflow:"hidden" }}
+                        onMouseLeave={()=>setMenuTipo(null)}>
+                        {/* Cambiar color */}
+                        <label style={{ display:"flex", alignItems:"center", gap:8,
+                          padding:"9px 14px", cursor:"pointer",
+                          fontSize:12, color:C.textMain, fontFamily:"Arial,sans-serif",
+                          borderBottom:`1px solid ${C.border}` }}
+                          onMouseEnter={e=>e.currentTarget.style.background=C.bg}
+                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span style={{ width:14, height:14, borderRadius:3,
+                            background:colorActual, display:"inline-block",
+                            border:`1px solid ${C.border}` }}/>
+                          Cambiar color
+                          <input type="color" value={colorActual}
+                            onChange={e=>cambiarColor(t.id,e.target.value)}
+                            style={{ width:0, height:0, padding:0, border:"none",
+                              opacity:0, position:"absolute" }} />
+                        </label>
+                        {/* Eliminar — solo para tipos personalizados */}
+                        {esCustom&&(
+                          <button
+                            onClick={()=>eliminarTipoCustom(t.id,t.label)}
+                            style={{ display:"flex", alignItems:"center", gap:8,
+                              padding:"9px 14px", cursor:"pointer", width:"100%",
+                              fontSize:12, color:"#b91c1c", fontFamily:"Arial,sans-serif",
+                              background:"transparent", border:"none", textAlign:"left" }}
+                            onMouseEnter={e=>e.currentTarget.style.background="#fee2e2"}
+                            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                            🗑 Eliminar esta tarea
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
