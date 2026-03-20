@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase";
 import {
-  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc
+  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField
 } from "firebase/firestore";
 
 const TAREAS_SISTEMA = [
@@ -131,6 +131,14 @@ export default function HuertaApp() {
       s.docs.forEach(d => { obj[d.id] = d.data().color; });
       setColoresCustom(obj);
     });
+    // Migración: eliminar campo "año" de todos los cultivos existentes
+    onSnapshot(collection(db,"cultivos"), snap => {
+      snap.docs.forEach(d => {
+        if (d.data().año !== undefined) {
+          updateDoc(doc(db,"cultivos",d.id), { año: deleteField() });
+        }
+      });
+    }, () => {}); // silencia errores de permisos
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
@@ -155,8 +163,13 @@ export default function HuertaApp() {
 
   async function addCultivo() {
     if (!newCult.nombre) return;
-    await addDoc(collection(db,"cultivos"), { ...newCult, año:Number(newCult.año) });
-    setNewCult({ nombre:"", año:new Date().getFullYear(), ubicacion:"", activo:true });
+    const datos = { nombre:newCult.nombre, ubicacion:newCult.ubicacion, activo:newCult.activo };
+    if (newCult.sol) datos.sol = newCult.sol;
+    if (newCult.riego) datos.riego = newCult.riego;
+    if (newCult.texturaSuelo) datos.texturaSuelo = newCult.texturaSuelo;
+    if (newCult.profundidadSuelo) datos.profundidadSuelo = newCult.profundidadSuelo;
+    await addDoc(collection(db,"cultivos"), datos);
+    setNewCult({ nombre:"", ubicacion:"", activo:true });
     setShowAddCultivo(false);
   }
   async function toggleActivo(id, actual) {
@@ -335,8 +348,8 @@ export default function HuertaApp() {
                     <label title="Cambiar color" style={{
                       display:"flex", alignItems:"center", justifyContent:"center",
                       padding:"0 6px 0 2px", cursor:"pointer", opacity:0.85,
-                      fontSize:11, color:"white" }}>
-                      🎨
+                      fontSize:13, color:"white", letterSpacing:1 }}>
+                      ···
                       <input type="color" value={colorActual}
                         onChange={e=>cambiarColor(t.id,e.target.value)}
                         style={{ width:0, height:0, padding:0, border:"none",
@@ -477,7 +490,7 @@ export default function HuertaApp() {
                               <rect x={barX+1} y={barY+2} width={barW} height={barH} rx={R} fill="rgba(0,0,0,0.08)"/>
                               <rect x={barX} y={barY} width={barW} height={barH} rx={R}
                                 fill={info.color} opacity={isHov?1:0.88}/>
-                              {tareaRep.comentario&&<circle cx={barX+barW-6} cy={barY+5} r={4} fill="#e67e22" stroke="white" strokeWidth={1.5}/>}
+                              {tareaRep.comentario&&<polygon points={`${barX+barW-10},${barY} ${barX+barW},${barY} ${barX+barW},${barY+10}`} fill="#e67e22"/>}
                               <rect x={barX} y={barY} width={barW} height={barH} fill="transparent"
                                 style={{cursor:"pointer"}}
                                 onMouseEnter={()=>setHoveredTask(`seg-${c.id}-${segIdx}`)}
@@ -605,10 +618,12 @@ export default function HuertaApp() {
                         <div style={{ fontSize:17, fontWeight:"bold", color:C.textMain }}>
                           {c.nombre}
                         </div>
-                        <div style={{ fontSize:12, color:C.textSub, marginTop:3,
-                          fontFamily:"Arial,sans-serif" }}>
-                          {c.año}{c.ubicacion&&`  ·  ${c.ubicacion}`}
-                        </div>
+                        {c.ubicacion&&(
+                          <div style={{ fontSize:12, color:C.textSub, marginTop:3,
+                            fontFamily:"Arial,sans-serif" }}>
+                            📍 {c.ubicacion}
+                          </div>
+                        )}
                       </div>
                       <button onClick={()=>toggleActivo(c.id,c.activo)} style={{
                         padding:"4px 12px", borderRadius:20,
@@ -620,6 +635,25 @@ export default function HuertaApp() {
                         {c.activo?"✓ Activo":"Inactivo"}
                       </button>
                     </div>
+
+                    {/* Antecedentes */}
+                    {(c.sol||c.riego||c.texturaSuelo||c.profundidadSuelo)&&(
+                      <div style={{ marginTop:10, display:"flex", flexWrap:"wrap", gap:5 }}>
+                        {c.sol&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#fef9c3", color:"#92660a", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #fde68a" }}>☀️ {c.sol}</span>}
+                        {c.riego&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#eff6ff", color:"#1d4ed8", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #bfdbfe" }}>💧 {c.riego}</span>}
+                        {c.texturaSuelo&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#f5f0e8", color:"#7c5c2e", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #e5d5b5" }}>🪨 {c.texturaSuelo}</span>}
+                        {c.profundidadSuelo&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#f0fdf4", color:"#15803d", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #bbf7d0" }}>📏 {c.profundidadSuelo}</span>}
+                      </div>
+                    )}
+
                     <div style={{ marginTop:14, borderTop:`1px solid ${C.border}`, paddingTop:12 }}>
                       {tareasC.length===0
                         ? <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic", fontFamily:"Arial,sans-serif" }}>Sin tareas registradas</div>
@@ -628,31 +662,53 @@ export default function HuertaApp() {
                             tareasC.forEach(t=>{
                               const info=getTipoInfo(t.tipo,t.label,tareasCustom,coloresCustom);
                               const key=t.tipo+"|"+(t.label||info.label);
-                              if(!grupos[key]) grupos[key]={ info, label:t.label||info.label, meses:[], tareas:[] };
-                              grupos[key].meses.push(parseInt(t.fecha?.slice(5,7)||"1",10)-1);
+                              if(!grupos[key]) grupos[key]={ info, label:t.label||info.label, tareas:[] };
                               grupos[key].tareas.push(t);
                             });
-                            return Object.values(grupos).map((g,gi)=>(
-                              <div key={gi} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:9 }}>
-                                <div style={{ width:10, height:10, borderRadius:"50%", background:g.info.color, flexShrink:0, marginTop:4 }}/>
-                                <div style={{ flex:1 }}>
-                                  <span style={{ fontSize:13, fontWeight:"bold", color:g.info.color, fontFamily:"Georgia,serif" }}>
-                                    {g.label}
-                                  </span>
-                                  <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:4 }}>
-                                    {g.meses.sort((a,b)=>a-b).map((m,mi)=>(
-                                      <span key={mi} onClick={()=>setEditTask({...g.tareas[mi]})}
-                                        style={{ fontSize:11, padding:"2px 9px", borderRadius:12,
-                                          background:g.info.color+"18", color:g.info.color,
-                                          border:`1px solid ${g.info.color}44`,
-                                          cursor:"pointer", fontFamily:"Arial,sans-serif", fontWeight:"bold" }}>
-                                        {MONTHS[m]}
-                                      </span>
-                                    ))}
+                            return Object.values(grupos).map((g,gi)=>{
+                              // Ordenar tareas por mes
+                              const tareasOrdenadas=[...g.tareas].sort((a,b)=>{
+                                const ma=parseInt(a.fecha?.slice(5,7)||"1",10);
+                                const mb=parseInt(b.fecha?.slice(5,7)||"1",10);
+                                return ma-mb;
+                              });
+                              // Comentarios únicos (no vacíos)
+                              const comentarios=tareasOrdenadas
+                                .filter(t=>t.comentario)
+                                .map(t=>({ mes:mesLabel(t.fecha), texto:t.comentario }));
+                              return (
+                                <div key={gi} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:10 }}>
+                                  <div style={{ width:10, height:10, borderRadius:"50%", background:g.info.color, flexShrink:0, marginTop:4 }}/>
+                                  <div style={{ flex:1 }}>
+                                    <span style={{ fontSize:13, fontWeight:"bold", color:g.info.color, fontFamily:"Georgia,serif" }}>
+                                      {g.label}
+                                    </span>
+                                    <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:4 }}>
+                                      {tareasOrdenadas.map((t,mi)=>(
+                                        <span key={mi} onClick={()=>setEditTask({...t})}
+                                          style={{ fontSize:11, padding:"2px 9px", borderRadius:12,
+                                            background:g.info.color+"18", color:g.info.color,
+                                            border:`1px solid ${g.info.color}44`,
+                                            cursor:"pointer", fontFamily:"Arial,sans-serif", fontWeight:"bold" }}>
+                                          {mesLabel(t.fecha)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    {comentarios.length>0&&(
+                                      <div style={{ marginTop:5, display:"flex", flexDirection:"column", gap:2 }}>
+                                        {comentarios.map((c,ci)=>(
+                                          <div key={ci} style={{ fontSize:11, color:g.info.color,
+                                            fontFamily:"Arial,sans-serif", fontStyle:"italic",
+                                            opacity:0.85 }}>
+                                            <span style={{ fontWeight:"bold", fontStyle:"normal" }}>{c.mes}:</span> {c.texto}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
-                              </div>
-                            ));
+                              );
+                            });
                           })()
                       }
                     </div>
@@ -898,14 +954,26 @@ export default function HuertaApp() {
               onChange={e=>setNewCult({...newCult,nombre:e.target.value})}
               style={inp} placeholder="Ej: Tomates, Arvejas..." />
           </Campo>
-          <Campo label="Año">
-            <input type="number" value={newCult.año}
-              onChange={e=>setNewCult({...newCult,año:e.target.value})} style={inp} />
-          </Campo>
           <Campo label="Ubicación (opcional)">
             <input value={newCult.ubicacion}
               onChange={e=>setNewCult({...newCult,ubicacion:e.target.value})}
               style={inp} placeholder="Ej: Cama Norte, Macetero..." />
+          </Campo>
+          <Campo label="☀️  Exposición al sol">
+            <input value={newCult.sol||""} onChange={e=>setNewCult({...newCult,sol:e.target.value})}
+              style={inp} placeholder="Ej: Pleno sol, media sombra..." />
+          </Campo>
+          <Campo label="💧  Frecuencia de riego">
+            <input value={newCult.riego||""} onChange={e=>setNewCult({...newCult,riego:e.target.value})}
+              style={inp} placeholder="Ej: Cada 2 días, semanal..." />
+          </Campo>
+          <Campo label="🪨  Textura del suelo">
+            <input value={newCult.texturaSuelo||""} onChange={e=>setNewCult({...newCult,texturaSuelo:e.target.value})}
+              style={inp} placeholder="Ej: Franco arenoso, arcilloso..." />
+          </Campo>
+          <Campo label="📏  Profundidad del suelo">
+            <input value={newCult.profundidadSuelo||""} onChange={e=>setNewCult({...newCult,profundidadSuelo:e.target.value})}
+              style={inp} placeholder="Ej: 30 cm, más de 50 cm..." />
           </Campo>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
             <input type="checkbox" checked={newCult.activo}
