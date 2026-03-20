@@ -490,7 +490,11 @@ export default function HuertaApp() {
                               <rect x={barX+1} y={barY+2} width={barW} height={barH} rx={R} fill="rgba(0,0,0,0.08)"/>
                               <rect x={barX} y={barY} width={barW} height={barH} rx={R}
                                 fill={info.color} opacity={isHov?1:0.88}/>
-                              {tareaRep.comentario&&<polygon points={`${barX+barW-10},${barY} ${barX+barW},${barY} ${barX+barW},${barY+10}`} fill="#e67e22"/>}
+                              {tareaRep.comentario&&<g>
+                                <polygon points={`${barX+barW-10},${barY} ${barX+barW},${barY} ${barX+barW},${barY+10}`} fill="#e67e22"/>
+                                <polygon points={`${barX+barW-10},${barY} ${barX+barW},${barY+10} ${barX+barW-10},${barY+10}`} fill="rgba(0,0,0,0.15)"/>
+                                <line x1={barX+barW-10} y1={barY} x2={barX+barW} y2={barY+10} stroke="white" strokeWidth={0.8} opacity={0.6}/>
+                              </g>}
                               <rect x={barX} y={barY} width={barW} height={barH} fill="transparent"
                                 style={{cursor:"pointer"}}
                                 onMouseEnter={()=>setHoveredTask(`seg-${c.id}-${segIdx}`)}
