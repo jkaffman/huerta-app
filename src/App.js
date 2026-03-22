@@ -369,7 +369,7 @@ export default function HuertaApp() {
                       <span style={{ fontSize:11, color:"white", fontWeight:"bold",
                         fontFamily:"Arial,sans-serif", padding:"3px 8px 3px 10px" }}>{t.label}</span>
                       <button
-                        onClick={()=>setMenuTipo(menuAbierto?null:t.id)}
+                        onClick={e=>{ e.stopPropagation(); setMenuTipo(menuAbierto?null:t.id); }}
                         style={{ display:"flex", alignItems:"center", justifyContent:"center",
                           padding:"0 8px 0 2px", cursor:"pointer", background:"transparent",
                           border:"none", fontSize:13, color:"white", letterSpacing:1,
@@ -401,7 +401,7 @@ export default function HuertaApp() {
                         </label>
                         {/* Eliminar — disponible para todos los tipos */}
                         <button
-                          onClick={()=>eliminarTipoCustom(t.id,t.label)}
+                          onClick={e=>{ e.stopPropagation(); eliminarTipoCustom(t.id,t.label); }}
                           style={{ display:"flex", alignItems:"center", gap:8,
                             padding:"9px 14px", cursor:"pointer", width:"100%",
                             fontSize:12, color:"#b91c1c", fontFamily:"Arial,sans-serif",
@@ -463,7 +463,9 @@ export default function HuertaApp() {
                       <text x={10} y={y0+ROW_H/2+5}
                         fill={c.activo?C.textMain:C.textMuted}
                         fontSize={Math.round(12*sc)} fontWeight="bold" fontFamily="Georgia,serif"
-                        fontStyle={c.activo?"normal":"italic"}>{c.nombre}</text>
+                        fontStyle={c.activo?"normal":"italic"}
+                        style={{cursor:"pointer"}}
+                        onClick={()=>{ setView("libro"); setEditCultivo({...c}); }}>{c.nombre}</text>
 
                       {/* AGRUPADO POR MES - barras divididas */}
                       {(()=>{
@@ -708,7 +710,7 @@ export default function HuertaApp() {
                     </div>
 
                     {/* Antecedentes */}
-                    {(c.sol||c.riego||c.texturaSuelo||c.profundidadSuelo)&&(
+                    {(c.sol||c.riego||c.texturaSuelo||c.profundidadSuelo||c.heladas||c.floracion||c.fructificacion)&&(
                       <div style={{ marginTop:10, display:"flex", flexWrap:"wrap", gap:5 }}>
                         {c.sol&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
                           background:"#fef9c3", color:"#92660a", fontFamily:"Arial,sans-serif",
@@ -722,6 +724,15 @@ export default function HuertaApp() {
                         {c.profundidadSuelo&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
                           background:"#f0fdf4", color:"#15803d", fontFamily:"Arial,sans-serif",
                           border:"1px solid #bbf7d0" }}>📏 {c.profundidadSuelo}</span>}
+                        {c.heladas&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#f0f9ff", color:"#0369a1", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #bae6fd" }}>🧊 {c.heladas==="sensible"?"Sensible a heladas":"No sensible"}</span>}
+                        {c.floracion&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#fdf4ff", color:"#7e22ce", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #e9d5ff" }}>🌸 {c.floracion}</span>}
+                        {c.fructificacion&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
+                          background:"#fff7ed", color:"#c2410c", fontFamily:"Arial,sans-serif",
+                          border:"1px solid #fed7aa" }}>🍅 {c.fructificacion}</span>}
                       </div>
                     )}
 
@@ -1046,6 +1057,21 @@ export default function HuertaApp() {
             <input value={newCult.profundidadSuelo||""} onChange={e=>setNewCult({...newCult,profundidadSuelo:e.target.value})}
               style={inp} placeholder="Ej: 30 cm, más de 50 cm..." />
           </Campo>
+          <Campo label="🧊  Sensibilidad a heladas">
+            <select value={newCult.heladas||""} onChange={e=>setNewCult({...newCult,heladas:e.target.value})} style={sel}>
+              <option value="">— Sin especificar —</option>
+              <option value="sensible">Sensible a heladas</option>
+              <option value="no-sensible">No sensible a heladas</option>
+            </select>
+          </Campo>
+          <Campo label="🌸  Período de floración">
+            <input value={newCult.floracion||""} onChange={e=>setNewCult({...newCult,floracion:e.target.value})}
+              style={inp} placeholder="Ej: Sep – Nov, primavera..." />
+          </Campo>
+          <Campo label="🍅  Período de fructificación">
+            <input value={newCult.fructificacion||""} onChange={e=>setNewCult({...newCult,fructificacion:e.target.value})}
+              style={inp} placeholder="Ej: Dic – Feb, verano..." />
+          </Campo>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
             <input type="checkbox" checked={newCult.activo}
               onChange={e=>setNewCult({...newCult,activo:e.target.checked})}
@@ -1091,6 +1117,23 @@ export default function HuertaApp() {
             <input value={editCultivo.profundidadSuelo||""}
               onChange={e=>setEditCultivo({...editCultivo,profundidadSuelo:e.target.value})}
               style={inp} placeholder="Ej: 30 cm, más de 50 cm..." />
+          </Campo>
+          <Campo label="🧊  Sensibilidad a heladas">
+            <select value={editCultivo.heladas||""} onChange={e=>setEditCultivo({...editCultivo,heladas:e.target.value})} style={sel}>
+              <option value="">— Sin especificar —</option>
+              <option value="sensible">Sensible a heladas</option>
+              <option value="no-sensible">No sensible a heladas</option>
+            </select>
+          </Campo>
+          <Campo label="🌸  Período de floración">
+            <input value={editCultivo.floracion||""}
+              onChange={e=>setEditCultivo({...editCultivo,floracion:e.target.value})}
+              style={inp} placeholder="Ej: Sep – Nov, primavera..." />
+          </Campo>
+          <Campo label="🍅  Período de fructificación">
+            <input value={editCultivo.fructificacion||""}
+              onChange={e=>setEditCultivo({...editCultivo,fructificacion:e.target.value})}
+              style={inp} placeholder="Ej: Dic – Feb, verano..." />
           </Campo>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
             <input type="checkbox" checked={editCultivo.activo||false}
