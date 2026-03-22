@@ -104,6 +104,7 @@ export default function HuertaApp() {
   const [ganttScale, setGanttScale] = useState(getGanttScale);
   const [coloresCustom, setColoresCustom] = useState({}); // { tipoId: "#hexcolor" }
   const [menuTipo, setMenuTipo] = useState(null); // id del tipo con menú abierto
+  const [editCultivo, setEditCultivo] = useState(null); // cultivo en edición
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -187,6 +188,12 @@ export default function HuertaApp() {
   }
   async function toggleActivo(id, actual) {
     await updateDoc(doc(db,"cultivos",id), { activo:!actual });
+  }
+  async function saveCultivo() {
+    if (!editCultivo?.nombre) return;
+    const { id, ...data } = editCultivo;
+    await updateDoc(doc(db,"cultivos",id), data);
+    setEditCultivo(null);
   }
   async function deleteCultivo(id) {
     if (!window.confirm("¿Eliminar este cultivo y todas sus tareas?")) return;
@@ -348,10 +355,10 @@ export default function HuertaApp() {
             </div>
 
             {/* Leyenda */}
+            {menuTipo&&<div style={{ position:"fixed", inset:0, zIndex:299 }} onClick={()=>setMenuTipo(null)}/>}
             <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:16 }}>
               {todosLosTipos.map(t=>{
                 const colorActual = coloresCustom[t.id] || t.color;
-                const esCustom = tareasCustom.some(tc=>tc.id===t.id);
                 const menuAbierto = menuTipo===t.id;
                 return (
                   <div key={t.id} style={{ position:"relative" }}>
@@ -374,37 +381,35 @@ export default function HuertaApp() {
                       <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0,
                         background:"#FAF8FE", border:`1.5px solid ${C.border}`,
                         borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-                        zIndex:300, minWidth:170, overflow:"hidden" }}
-                        onMouseLeave={()=>setMenuTipo(null)}>
+                        zIndex:300, minWidth:170, overflow:"hidden" }}>
                         {/* Cambiar color */}
                         <label style={{ display:"flex", alignItems:"center", gap:8,
                           padding:"9px 14px", cursor:"pointer",
                           fontSize:12, color:C.textMain, fontFamily:"Arial,sans-serif",
-                          borderBottom:`1px solid ${C.border}` }}
+                          borderBottom:`1px solid ${C.border}`,
+                          background:"transparent" }}
                           onMouseEnter={e=>e.currentTarget.style.background=C.bg}
                           onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                           <span style={{ width:14, height:14, borderRadius:3,
                             background:colorActual, display:"inline-block",
-                            border:`1px solid ${C.border}` }}/>
+                            border:`1px solid ${C.border}`, flexShrink:0 }}/>
                           Cambiar color
                           <input type="color" value={colorActual}
                             onChange={e=>cambiarColor(t.id,e.target.value)}
                             style={{ width:0, height:0, padding:0, border:"none",
                               opacity:0, position:"absolute" }} />
                         </label>
-                        {/* Eliminar — solo para tipos personalizados */}
-                        {esCustom&&(
-                          <button
-                            onClick={()=>eliminarTipoCustom(t.id,t.label)}
-                            style={{ display:"flex", alignItems:"center", gap:8,
-                              padding:"9px 14px", cursor:"pointer", width:"100%",
-                              fontSize:12, color:"#b91c1c", fontFamily:"Arial,sans-serif",
-                              background:"transparent", border:"none", textAlign:"left" }}
-                            onMouseEnter={e=>e.currentTarget.style.background="#fee2e2"}
-                            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                            🗑 Eliminar esta tarea
-                          </button>
-                        )}
+                        {/* Eliminar — disponible para todos los tipos */}
+                        <button
+                          onClick={()=>eliminarTipoCustom(t.id,t.label)}
+                          style={{ display:"flex", alignItems:"center", gap:8,
+                            padding:"9px 14px", cursor:"pointer", width:"100%",
+                            fontSize:12, color:"#b91c1c", fontFamily:"Arial,sans-serif",
+                            background:"transparent", border:"none", textAlign:"left" }}
+                          onMouseEnter={e=>e.currentTarget.style.background="#fee2e2"}
+                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          🗑 Eliminar esta tarea
+                        </button>
                       </div>
                     )}
                   </div>
@@ -681,15 +686,25 @@ export default function HuertaApp() {
                           </div>
                         )}
                       </div>
-                      <button onClick={()=>toggleActivo(c.id,c.activo)} style={{
-                        padding:"4px 12px", borderRadius:20,
-                        border:`1.5px solid ${c.activo?C.accent:C.border}`,
-                        background:c.activo?"#e8f5e2":"transparent",
-                        color:c.activo?C.accent:C.textMuted,
-                        cursor:"pointer", fontSize:11, fontWeight:"bold",
-                        fontFamily:"Arial,sans-serif" }}>
-                        {c.activo?"✓ Activo":"Inactivo"}
-                      </button>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <button onClick={()=>setEditCultivo({...c})} style={{
+                          padding:"4px 10px", borderRadius:20,
+                          border:`1px solid ${C.border}`,
+                          background:"transparent", color:C.textSub,
+                          cursor:"pointer", fontSize:13, letterSpacing:1,
+                          fontFamily:"Arial,sans-serif" }} title="Editar cultivo">
+                          ···
+                        </button>
+                        <button onClick={()=>toggleActivo(c.id,c.activo)} style={{
+                          padding:"4px 12px", borderRadius:20,
+                          border:`1.5px solid ${c.activo?C.accent:C.border}`,
+                          background:c.activo?"#e8f5e2":"transparent",
+                          color:c.activo?C.accent:C.textMuted,
+                          cursor:"pointer", fontSize:11, fontWeight:"bold",
+                          fontFamily:"Arial,sans-serif" }}>
+                          {c.activo?"✓ Activo":"Inactivo"}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Antecedentes */}
@@ -1041,6 +1056,56 @@ export default function HuertaApp() {
           <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
             <button onClick={()=>setShowAddCultivo(false)} style={btnCancel}>Cancelar</button>
             <button onClick={addCultivo} style={btnPrimary}>Crear Cultivo</button>
+          </div>
+        </Modal>
+      )}
+
+      {editCultivo&&(
+        <Modal title="✏️  Editar Cultivo" onClose={()=>setEditCultivo(null)}>
+          <Campo label="Nombre del cultivo">
+            <input value={editCultivo.nombre||""}
+              onChange={e=>setEditCultivo({...editCultivo,nombre:e.target.value})}
+              style={inp} />
+          </Campo>
+          <Campo label="Ubicación (opcional)">
+            <input value={editCultivo.ubicacion||""}
+              onChange={e=>setEditCultivo({...editCultivo,ubicacion:e.target.value})}
+              style={inp} placeholder="Ej: Cama Norte, Macetero..." />
+          </Campo>
+          <Campo label="☀️  Exposición al sol">
+            <input value={editCultivo.sol||""}
+              onChange={e=>setEditCultivo({...editCultivo,sol:e.target.value})}
+              style={inp} placeholder="Ej: Pleno sol, media sombra..." />
+          </Campo>
+          <Campo label="💧  Frecuencia de riego">
+            <input value={editCultivo.riego||""}
+              onChange={e=>setEditCultivo({...editCultivo,riego:e.target.value})}
+              style={inp} placeholder="Ej: Cada 2 días, semanal..." />
+          </Campo>
+          <Campo label="🪨  Textura del suelo">
+            <input value={editCultivo.texturaSuelo||""}
+              onChange={e=>setEditCultivo({...editCultivo,texturaSuelo:e.target.value})}
+              style={inp} placeholder="Ej: Franco arenoso, arcilloso..." />
+          </Campo>
+          <Campo label="📏  Profundidad del suelo">
+            <input value={editCultivo.profundidadSuelo||""}
+              onChange={e=>setEditCultivo({...editCultivo,profundidadSuelo:e.target.value})}
+              style={inp} placeholder="Ej: 30 cm, más de 50 cm..." />
+          </Campo>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+            <input type="checkbox" checked={editCultivo.activo||false}
+              onChange={e=>setEditCultivo({...editCultivo,activo:e.target.checked})}
+              id="edit-activo-chk" style={{ width:16, height:16, accentColor:C.accent }} />
+            <label htmlFor="edit-activo-chk" style={{ fontSize:13, color:C.textSub,
+              fontFamily:"Arial,sans-serif" }}>Cultivo activo</label>
+          </div>
+          <div style={{ display:"flex", gap:8, justifyContent:"space-between" }}>
+            <button onClick={()=>{ deleteCultivo(editCultivo.id); setEditCultivo(null); }}
+              style={btnDanger}>🗑 Eliminar</button>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={()=>setEditCultivo(null)} style={btnCancel}>Cancelar</button>
+              <button onClick={saveCultivo} style={btnPrimary}>Guardar</button>
+            </div>
           </div>
         </Modal>
       )}
