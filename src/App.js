@@ -7,10 +7,8 @@ import {
 const TAREAS_SISTEMA = [
   { id:"sembrar",     label:"Sembrar",      color:"#2d7a3a", light:"#e8f5e2", abrev:"SEM" },
   { id:"trasplantar", label:"Trasplantar",  color:"#7B5EA7", light:"#ede9fe", abrev:"TRA" },
-  { id:"regar",       label:"Regar",        color:"#1d4ed8", light:"#eff6ff", abrev:"REG" },
   { id:"fertilizar",  label:"Fertilizar",   color:"#92660a", light:"#fef3c7", abrev:"FER" },
   { id:"plagas",      label:"Ctrl. plagas", color:"#b91c1c", light:"#fee2e2", abrev:"PLA" },
-  { id:"malezas",     label:"Malezas",      color:"#6b21a8", light:"#f3e8ff", abrev:"MAL" },
   { id:"podar",       label:"Podar",        color:"#ca8a04", light:"#fefce8", abrev:"POD" },
   { id:"cosechar",    label:"Cosechar",     color:"#ea580c", light:"#fff7ed", abrev:"COS" },
 ];
@@ -151,8 +149,8 @@ export default function HuertaApp() {
 
   async function eliminarTipoCustom(tipoId, tipoLabel) {
     if (!window.confirm(`¿Eliminar el tipo "${tipoLabel}"? También se eliminarán todas las tareas de este tipo.`)) return;
-    // Eliminar el tipo de tiposCustom
-    await deleteDoc(doc(db,"tiposCustom",tipoId));
+    // Eliminar de tiposCustom si es personalizado
+    await deleteDoc(doc(db,"tiposCustom",tipoId)).catch(()=>{});
     // Eliminar todas las tareas que usan este tipo
     const tareasDelTipo = tareas.filter(t=>t.tipo===tipoId);
     for (const t of tareasDelTipo) await deleteDoc(doc(db,"tareas",t.id));
@@ -639,9 +637,18 @@ export default function HuertaApp() {
                 grupos[key].tareas.push(t);
               });
               return (
-                <div style={{ marginTop:12, background:C.bgCard,
-                  border:`2px solid ${C.accent}`, borderRadius:8, padding:18,
-                  boxShadow:"0 4px 20px rgba(0,0,0,0.10)" }}>
+                <>
+                  {/* Overlay para cerrar al hacer clic fuera */}
+                  <div style={{ position:"fixed", inset:0, zIndex:400 }}
+                    onClick={()=>setFichaGantt(null)}/>
+                  {/* Panel flotante */}
+                  <div style={{ position:"fixed", top:"50%", left:"50%",
+                    transform:"translate(-50%,-50%)",
+                    zIndex:401, width:"min(480px, 90vw)",
+                    maxHeight:"80vh", overflowY:"auto",
+                    background:C.bgCard, border:`2px solid ${C.accent}`,
+                    borderRadius:10, padding:20,
+                    boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
                     <div>
                       <div style={{ fontSize:17, fontWeight:"bold", color:C.textMain, fontFamily:"Georgia,serif" }}>
@@ -677,7 +684,7 @@ export default function HuertaApp() {
                                 <span style={{ fontSize:13, fontWeight:"bold", color:g.info.color, fontFamily:"Georgia,serif" }}>{g.label}</span>
                                 <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:3 }}>
                                   {tareasOrdenadas.map((t,mi)=>(
-                                    <span key={mi} onClick={()=>setEditTask({...t})}
+                                    <span key={mi} onClick={()=>{ setEditTask({...t}); setFichaGantt(null); }}
                                       style={{ fontSize:11, padding:"2px 8px", borderRadius:12,
                                         background:g.info.color+"18", color:g.info.color,
                                         border:`1px solid ${g.info.color}44`,
@@ -701,7 +708,8 @@ export default function HuertaApp() {
                         })
                     }
                   </div>
-                </div>
+                  </div>
+                </>
               );
             })()}
           </div>
