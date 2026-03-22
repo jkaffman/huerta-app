@@ -467,6 +467,10 @@ export default function HuertaApp() {
                         fontStyle={c.activo?"normal":"italic"}
                         style={{cursor:"pointer", textDecoration:"underline"}}
                         onClick={()=>setFichaGantt(fichaGantt?.id===c.id?null:c)}>{c.nombre}</text>
+                      {/* Zona clickeable invisible sobre el nombre */}
+                      <rect x={0} y={y0} width={LABEL_W} height={ROW_H}
+                        fill="transparent" style={{cursor:"pointer"}}
+                        onClick={()=>setFichaGantt(fichaGantt?.id===c.id?null:c)}/>
 
                       {/* AGRUPADO POR MES - barras divididas */}
                       {(()=>{
