@@ -105,6 +105,7 @@ export default function HuertaApp() {
   const [coloresCustom, setColoresCustom] = useState({}); // { tipoId: "#hexcolor" }
   const [menuTipo, setMenuTipo] = useState(null); // id del tipo con menú abierto
   const [editCultivo, setEditCultivo] = useState(null); // cultivo en edición
+  const [fichaGantt, setFichaGantt] = useState(null); // cultivo cuya ficha se muestra desde Gantt
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -461,11 +462,11 @@ export default function HuertaApp() {
                       <rect x={0} y={y0+6} width={3} height={ROW_H-12} rx={1.5}
                         fill={c.activo?C.accent:C.textMuted} />
                       <text x={10} y={y0+ROW_H/2+5}
-                        fill={c.activo?C.textMain:C.textMuted}
+                        fill={c.activo?C.accent:C.textMuted}
                         fontSize={Math.round(12*sc)} fontWeight="bold" fontFamily="Georgia,serif"
                         fontStyle={c.activo?"normal":"italic"}
-                        style={{cursor:"pointer"}}
-                        onClick={()=>{ setView("libro"); setEditCultivo({...c}); }}>{c.nombre}</text>
+                        style={{cursor:"pointer", textDecoration:"underline"}}
+                        onClick={()=>setFichaGantt(fichaGantt?.id===c.id?null:c)}>{c.nombre}</text>
 
                       {/* AGRUPADO POR MES - barras divididas */}
                       {(()=>{
@@ -621,6 +622,84 @@ export default function HuertaApp() {
                 </span> y agrega uno.
               </div>
             )}
+
+            {/* Ficha rápida al hacer clic en nombre del cultivo */}
+            {fichaGantt&&(()=>{
+              const c = fichaGantt;
+              const tareasC = tareas.filter(t=>t.cultivoId===c.id);
+              const grupos = {};
+              tareasC.forEach(t=>{
+                const info = getTipoInfo(t.tipo,t.label,tareasCustom,coloresCustom);
+                const key = t.tipo+"|"+(t.label||info.label);
+                if(!grupos[key]) grupos[key]={ info, label:t.label||info.label, tareas:[] };
+                grupos[key].tareas.push(t);
+              });
+              return (
+                <div style={{ marginTop:12, background:C.bgCard,
+                  border:`2px solid ${C.accent}`, borderRadius:8, padding:18,
+                  boxShadow:"0 4px 20px rgba(0,0,0,0.10)" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
+                    <div>
+                      <div style={{ fontSize:17, fontWeight:"bold", color:C.textMain, fontFamily:"Georgia,serif" }}>
+                        🌿 {c.nombre}
+                      </div>
+                      {c.ubicacion&&<div style={{ fontSize:12, color:C.textSub, marginTop:2, fontFamily:"Arial,sans-serif" }}>📍 {c.ubicacion}</div>}
+                    </div>
+                    <button onClick={()=>setFichaGantt(null)} style={{
+                      background:"transparent", border:"none", cursor:"pointer",
+                      fontSize:18, color:C.textMuted, lineHeight:1 }}>✕</button>
+                  </div>
+                  {(c.sol||c.riego||c.texturaSuelo||c.profundidadSuelo||c.heladas||c.floracion||c.fructificacion)&&(
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:12 }}>
+                      {c.sol&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#fef9c3", color:"#92660a", fontFamily:"Arial,sans-serif", border:"1px solid #fde68a" }}>☀️ {c.sol}</span>}
+                      {c.riego&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#eff6ff", color:"#1d4ed8", fontFamily:"Arial,sans-serif", border:"1px solid #bfdbfe" }}>💧 {c.riego}</span>}
+                      {c.texturaSuelo&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#f5f0e8", color:"#7c5c2e", fontFamily:"Arial,sans-serif", border:"1px solid #e5d5b5" }}>🪨 {c.texturaSuelo}</span>}
+                      {c.profundidadSuelo&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#f0fdf4", color:"#15803d", fontFamily:"Arial,sans-serif", border:"1px solid #bbf7d0" }}>📏 {c.profundidadSuelo}</span>}
+                      {c.heladas&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#f0f9ff", color:"#0369a1", fontFamily:"Arial,sans-serif", border:"1px solid #bae6fd" }}>❄️ {c.heladas==="sensible"?"Sensible a heladas":"No sensible"}</span>}
+                      {c.floracion&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#fdf4ff", color:"#7e22ce", fontFamily:"Arial,sans-serif", border:"1px solid #e9d5ff" }}>🌸 {c.floracion}</span>}
+                      {c.fructificacion&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"#fff7ed", color:"#c2410c", fontFamily:"Arial,sans-serif", border:"1px solid #fed7aa" }}>🍅 {c.fructificacion}</span>}
+                    </div>
+                  )}
+                  <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
+                    {tareasC.length===0
+                      ? <div style={{ fontSize:12, color:C.textMuted, fontStyle:"italic", fontFamily:"Arial,sans-serif" }}>Sin tareas registradas</div>
+                      : Object.values(grupos).map((g,gi)=>{
+                          const tareasOrdenadas=[...g.tareas].sort((a,b)=>a.fecha>b.fecha?1:-1);
+                          const comentarios=tareasOrdenadas.filter(t=>t.comentario).map(t=>({ mes:mesLabel(t.fecha), texto:t.comentario }));
+                          return (
+                            <div key={gi} style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:8 }}>
+                              <div style={{ width:10, height:10, borderRadius:"50%", background:g.info.color, flexShrink:0, marginTop:3 }}/>
+                              <div style={{ flex:1 }}>
+                                <span style={{ fontSize:13, fontWeight:"bold", color:g.info.color, fontFamily:"Georgia,serif" }}>{g.label}</span>
+                                <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:3 }}>
+                                  {tareasOrdenadas.map((t,mi)=>(
+                                    <span key={mi} onClick={()=>setEditTask({...t})}
+                                      style={{ fontSize:11, padding:"2px 8px", borderRadius:12,
+                                        background:g.info.color+"18", color:g.info.color,
+                                        border:`1px solid ${g.info.color}44`,
+                                        cursor:"pointer", fontFamily:"Arial,sans-serif", fontWeight:"bold" }}>
+                                      {mesLabel(t.fecha)}
+                                    </span>
+                                  ))}
+                                </div>
+                                {comentarios.length>0&&(
+                                  <div style={{ marginTop:4, display:"flex", flexDirection:"column", gap:2 }}>
+                                    {comentarios.map((cm,ci)=>(
+                                      <div key={ci} style={{ fontSize:11, color:g.info.color, fontFamily:"Arial,sans-serif", fontStyle:"italic", opacity:0.85 }}>
+                                        <span style={{ fontWeight:"bold", fontStyle:"normal" }}>{cm.mes}:</span> {cm.texto}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -726,7 +805,7 @@ export default function HuertaApp() {
                           border:"1px solid #bbf7d0" }}>📏 {c.profundidadSuelo}</span>}
                         {c.heladas&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
                           background:"#f0f9ff", color:"#0369a1", fontFamily:"Arial,sans-serif",
-                          border:"1px solid #bae6fd" }}>🧊 {c.heladas==="sensible"?"Sensible a heladas":"No sensible"}</span>}
+                          border:"1px solid #bae6fd" }}>❄️ {c.heladas==="sensible"?"Sensible a heladas":"No sensible"}</span>}
                         {c.floracion&&<span style={{ fontSize:10, padding:"2px 8px", borderRadius:10,
                           background:"#fdf4ff", color:"#7e22ce", fontFamily:"Arial,sans-serif",
                           border:"1px solid #e9d5ff" }}>🌸 {c.floracion}</span>}
@@ -875,7 +954,7 @@ export default function HuertaApp() {
               <select value={newTask.cultivoId}
                 onChange={e=>{ setNewTask({...newTask,cultivoId:e.target.value}); setRecurrente(null); setFechasExtra([""]); }} style={sel}>
                 <option value="">— Selecciona un cultivo —</option>
-                {cultivos.map(c=><option key={c.id} value={c.id}>{c.nombre} ({c.año})</option>)}
+                {cultivos.map(c=><option key={c.id} value={c.id}>{c.nombre}{c.ubicacion?` · ${c.ubicacion}`:""}</option>)}
               </select>
             </Campo>
 
@@ -1057,7 +1136,7 @@ export default function HuertaApp() {
             <input value={newCult.profundidadSuelo||""} onChange={e=>setNewCult({...newCult,profundidadSuelo:e.target.value})}
               style={inp} placeholder="Ej: 30 cm, más de 50 cm..." />
           </Campo>
-          <Campo label="🧊  Sensibilidad a heladas">
+          <Campo label="❄️  Sensibilidad a heladas">
             <select value={newCult.heladas||""} onChange={e=>setNewCult({...newCult,heladas:e.target.value})} style={sel}>
               <option value="">— Sin especificar —</option>
               <option value="sensible">Sensible a heladas</option>
@@ -1118,7 +1197,7 @@ export default function HuertaApp() {
               onChange={e=>setEditCultivo({...editCultivo,profundidadSuelo:e.target.value})}
               style={inp} placeholder="Ej: 30 cm, más de 50 cm..." />
           </Campo>
-          <Campo label="🧊  Sensibilidad a heladas">
+          <Campo label="❄️  Sensibilidad a heladas">
             <select value={editCultivo.heladas||""} onChange={e=>setEditCultivo({...editCultivo,heladas:e.target.value})} style={sel}>
               <option value="">— Sin especificar —</option>
               <option value="sensible">Sensible a heladas</option>
