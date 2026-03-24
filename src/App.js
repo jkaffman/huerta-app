@@ -104,6 +104,7 @@ export default function HuertaApp() {
   const [menuTipo, setMenuTipo] = useState(null); // id del tipo con menú abierto
   const [editCultivo, setEditCultivo] = useState(null); // cultivo en edición
   const [fichaGantt, setFichaGantt] = useState(null); // cultivo cuya ficha se muestra desde Gantt
+  const [mesResumen, setMesResumen] = useState(null); // índice del mes cuyo resumen se muestra
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -434,9 +435,13 @@ export default function HuertaApp() {
                 <line x1={0} y1={HEADER_H} x2={svgW} y2={HEADER_H}
                   stroke={C.borderDark} strokeWidth={2} />
                 {MONTHS.map((m,i)=>(
-                  <g key={i}>
+                  <g key={i} style={{cursor:"pointer"}}
+                    onClick={()=>setMesResumen(mesResumen===i?null:i)}>
                     <line x1={monthX(i)} y1={0} x2={monthX(i)} y2={svgH}
                       stroke={C.border} strokeWidth={1} />
+                    <rect x={monthX(i)} y={0} width={COL_W} height={HEADER_H}
+                      fill={mesResumen===i?"#6B5A9B":"transparent"}
+                      style={{transition:"fill .15s"}}/>
                     {/* Solo mes, sin año */}
                     <text x={monthX(i)+COL_W/2} y={HEADER_H/2+6}
                       textAnchor="middle" fill={C.monthText}
@@ -614,6 +619,71 @@ export default function HuertaApp() {
                 )}
               </svg>
             </div>
+
+            {/* ── Resumen del mes al hacer clic en encabezado ── */}
+            {mesResumen!==null&&(()=>{
+              const mesIdx = mesResumen;
+              const mesKey = `${year}-${String(mesIdx+1).padStart(2,"0")}`;
+              const tareasDelMes = tareas.filter(t=>t.fecha===mesKey);
+              // Agrupar por tipo
+              const porTipo = {};
+              tareasDelMes.forEach(t=>{
+                const info = getTipoInfo(t.tipo,t.label,tareasCustom,coloresCustom);
+                const key = t.tipo;
+                if(!porTipo[key]) porTipo[key]={ info, label:t.label||info.label, cultivos:[] };
+                const cult = cultivos.find(c=>c.id===t.cultivoId);
+                if(cult && !porTipo[key].cultivos.includes(cult.nombre)) {
+                  porTipo[key].cultivos.push(cult.nombre);
+                }
+              });
+              const grupos = Object.values(porTipo);
+              return (
+                <>
+                  <div style={{ position:"fixed", inset:0, zIndex:400 }}
+                    onClick={()=>setMesResumen(null)}/>
+                  <div style={{ position:"fixed", top:"50%", left:"50%",
+                    transform:"translate(-50%,-50%)",
+                    zIndex:401, width:"min(420px, 88vw)",
+                    background:C.bgCard, border:`2px solid ${C.borderDark}`,
+                    borderRadius:12, padding:22,
+                    boxShadow:"0 8px 40px rgba(0,0,0,0.28)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between",
+                      alignItems:"center", marginBottom:14 }}>
+                      <div style={{ fontSize:18, fontWeight:"bold",
+                        color:C.textMain, fontFamily:"Georgia,serif" }}>
+                        📅 {MONTHS_FULL[mesIdx]}
+                      </div>
+                      <button onClick={()=>setMesResumen(null)} style={{
+                        background:"transparent", border:"none", cursor:"pointer",
+                        fontSize:18, color:C.textMuted, lineHeight:1 }}>✕</button>
+                    </div>
+                    {grupos.length===0
+                      ? <div style={{ fontSize:13, color:C.textMuted, fontStyle:"italic",
+                          fontFamily:"Arial,sans-serif" }}>
+                          Sin tareas registradas en este mes.
+                        </div>
+                      : grupos.map((g,gi)=>(
+                          <div key={gi} style={{ display:"flex", alignItems:"flex-start",
+                            gap:10, marginBottom:10 }}>
+                            <div style={{ width:10, height:10, borderRadius:"50%",
+                              background:g.info.color, flexShrink:0, marginTop:3 }}/>
+                            <div style={{ flex:1 }}>
+                              <span style={{ fontSize:13, fontWeight:"bold",
+                                color:g.info.color, fontFamily:"Georgia,serif" }}>
+                                {g.label}
+                              </span>
+                              <span style={{ fontSize:12, color:C.textSub,
+                                fontFamily:"Arial,sans-serif", marginLeft:6 }}>
+                                {g.cultivos.join(", ")}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                    }
+                  </div>
+                </>
+              );
+            })()}
 
             {cultivosFiltrados.length===0&&(
               <div style={{ textAlign:"center", padding:52, color:C.textMuted,
