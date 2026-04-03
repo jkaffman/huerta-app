@@ -105,6 +105,12 @@ export default function HuertaApp() {
   const [editCultivo, setEditCultivo] = useState(null); // cultivo en edición
   const [fichaGantt, setFichaGantt] = useState(null); // cultivo cuya ficha se muestra desde Gantt
   const [mesResumen, setMesResumen] = useState(null); // índice del mes cuyo resumen se muestra
+  const [categorias, setCategorias] = useState([]); // categorías guardadas en Firebase
+  const [filtrosCat, setFiltrosCat] = useState([]); // ids de categorías seleccionadas (vacío = todas)
+  const [showGestCat, setShowGestCat] = useState(false); // modal gestión de categorías
+  const [editCatId, setEditCatId] = useState(null); // id de la categoría en edición inline
+  const [editCatNombre, setEditCatNombre] = useState(""); // nombre editado
+  const [newCatNombre, setNewCatNombre] = useState(""); // nombre nueva categoría
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -133,6 +139,17 @@ export default function HuertaApp() {
       s.docs.forEach(d => { obj[d.id] = d.data().color; });
       setColoresCustom(obj);
     });
+    let categoriasInicializadas = false;
+    const u5 = onSnapshot(collection(db,"categorias"), s => {
+      const cats = s.docs.map(d => ({ id:d.id, ...d.data() }));
+      if (cats.length === 0 && !categoriasInicializadas) {
+        categoriasInicializadas = true;
+        const defaults = ["Hortaliza","Frutal","Flor","Nativo","Hierba","Otros"];
+        defaults.forEach((nombre,i) => addDoc(collection(db,"categorias"), { nombre, orden: i }));
+      } else {
+        setCategorias(cats.sort((a,b)=>(a.orden||0)-(b.orden||0)));
+      }
+    });
     // Migración: eliminar campo "año" de todos los cultivos existentes
     onSnapshot(collection(db,"cultivos"), snap => {
       snap.docs.forEach(d => {
@@ -141,7 +158,7 @@ export default function HuertaApp() {
         }
       });
     }, () => {}); // silencia errores de permisos
-    return () => { u1(); u2(); u3(); u4(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, []);
 
   async function cambiarColor(tipoId, nuevoColor) {
@@ -182,8 +199,9 @@ export default function HuertaApp() {
     if (newCult.riego) datos.riego = newCult.riego;
     if (newCult.texturaSuelo) datos.texturaSuelo = newCult.texturaSuelo;
     if (newCult.profundidadSuelo) datos.profundidadSuelo = newCult.profundidadSuelo;
+    if (newCult.categoriaId) datos.categoriaId = newCult.categoriaId;
     await addDoc(collection(db,"cultivos"), datos);
-    setNewCult({ nombre:"", ubicacion:"", activo:true });
+    setNewCult({ nombre:"", ubicacion:"", activo:true, categoriaId:"" });
     setShowAddCultivo(false);
   }
   async function toggleActivo(id, actual) {
@@ -243,13 +261,44 @@ export default function HuertaApp() {
     setEditTask(null);
   }
 
+  async function addCategoria(nombre) {
+    const n = nombre.trim();
+    if (!n) return;
+    const orden = categorias.length;
+    await addDoc(collection(db,"categorias"), { nombre:n, orden });
+    setNewCatNombre("");
+  }
+  async function renombrarCategoria(id, nombre) {
+    const n = nombre.trim();
+    if (!n) return;
+    await updateDoc(doc(db,"categorias",id), { nombre:n });
+    setEditCatId(null);
+  }
+  async function eliminarCategoria(id) {
+    if (!window.confirm("¿Eliminar esta categoría? Los cultivos con esta categoría quedarán en Otros.")) return;
+    await deleteDoc(doc(db,"categorias",id));
+    setFiltrosCat(f => f.filter(x => x !== id));
+  }
+  function toggleFiltroCat(id) {
+    setFiltrosCat(f => f.includes(id) ? f.filter(x=>x!==id) : [...f,id]);
+  }
+  function catIdDeCultivo(c) {
+    if (c.categoriaId && categorias.find(x=>x.id===c.categoriaId)) return c.categoriaId;
+    const otros = categorias.find(x=>x.nombre==="Otros");
+    return otros ? otros.id : null;
+  }
+  function aplicarFiltroCat(arr) {
+    if (filtrosCat.length === 0) return arr;
+    return arr.map(c => ({ ...c, _filtrado: !filtrosCat.includes(catIdDeCultivo(c)) }));
+  }
+
   function sortCultivos(arr) {
     if (sortOrder==="az") return [...arr].sort((a,b)=>a.nombre.localeCompare(b.nombre));
     if (sortOrder==="za") return [...arr].sort((a,b)=>b.nombre.localeCompare(a.nombre));
     return arr;
   }
-  const cultivosFiltrados = sortCultivos(ganttMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos);
-  const cultivosLibro = sortCultivos(libroMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos);
+  const cultivosFiltrados = aplicarFiltroCat(sortCultivos(ganttMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos));
+  const cultivosLibro = aplicarFiltroCat(sortCultivos(libroMode==="activos" ? cultivos.filter(c=>c.activo) : cultivos));
 
   function monthX(i) { return LABEL_W + i*COL_W; }
   function taskX(fecha) {
@@ -417,6 +466,53 @@ export default function HuertaApp() {
               })}
             </div>
 
+            </div>
+
+            {/* Filtros por categoría */}
+            {categorias.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap",
+                gap:8, marginBottom:14, padding:"10px 14px",
+                background:C.bgCard, border:`1px solid ${C.border}`,
+                borderRadius:8 }}>
+                <span style={{ fontSize:11, color:C.textMuted, fontWeight:"bold",
+                  textTransform:"uppercase", letterSpacing:"0.8px",
+                  fontFamily:"Arial,sans-serif", marginRight:4 }}>Categorías:</span>
+                {categorias.map(cat => {
+                  const activo = filtrosCat.includes(cat.id);
+                  return (
+                    <label key={cat.id} style={{ display:"inline-flex", alignItems:"center",
+                      gap:6, cursor:"pointer", fontSize:12,
+                      color: activo ? C.bgHeader : C.textSub,
+                      fontFamily:"Arial,sans-serif",
+                      padding:"4px 10px", borderRadius:20,
+                      border:`1.5px solid ${activo ? C.bgHeader : C.border}`,
+                      background: activo ? C.bgHeader+"18" : "transparent",
+                      userSelect:"none" }}>
+                      <input type="checkbox" checked={activo}
+                        onChange={()=>toggleFiltroCat(cat.id)}
+                        style={{ width:13, height:13, accentColor:C.bgHeader, cursor:"pointer" }} />
+                      {cat.nombre}
+                    </label>
+                  );
+                })}
+                {filtrosCat.length > 0 && (
+                  <button onClick={()=>setFiltrosCat([])}
+                    style={{ fontSize:11, color:C.textMuted, background:"transparent",
+                      border:"none", cursor:"pointer", fontFamily:"Arial,sans-serif",
+                      textDecoration:"underline", padding:"2px 4px" }}>
+                    Limpiar filtros
+                  </button>
+                )}
+                <button onClick={()=>setShowGestCat(true)}
+                  style={{ marginLeft:"auto", fontSize:11, color:C.textSub,
+                    background:"transparent", border:`1px solid ${C.border}`,
+                    borderRadius:20, cursor:"pointer", fontFamily:"Arial,sans-serif",
+                    padding:"4px 12px" }}>
+                  ⚙ Gestionar categorías
+                </button>
+              </div>
+            )}
+
             {/* SVG Gantt — cabecera muestra solo mes, sin año */}
             <div style={{ borderRadius:8, border:`2px solid ${C.borderDark}`,
               overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.12)",
@@ -454,8 +550,9 @@ export default function HuertaApp() {
                 {cultivosFiltrados.map((c,rowIdx)=>{
                   const y0=HEADER_H+rowIdx*ROW_H;
                   const isEven=rowIdx%2===0;
+                  const atenuado = c._filtrado === true;
                   return (
-                    <g key={c.id}>
+                    <g key={c.id} opacity={atenuado ? 0.22 : 1}>
                       <rect x={LABEL_W} y={y0} width={svgW-LABEL_W} height={ROW_H}
                         fill={isEven?C.bgRow1:C.bgRow2} />
                       <rect x={0} y={y0} width={LABEL_W} height={ROW_H}
@@ -825,17 +922,64 @@ export default function HuertaApp() {
                 + Nuevo Cultivo
               </button>
             </div>
+            {/* Filtros por categoría en vista Libro */}
+            {categorias.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap",
+                gap:8, marginBottom:16, padding:"10px 14px",
+                background:C.bgCard, border:`1px solid ${C.border}`,
+                borderRadius:8 }}>
+                <span style={{ fontSize:11, color:C.textMuted, fontWeight:"bold",
+                  textTransform:"uppercase", letterSpacing:"0.8px",
+                  fontFamily:"Arial,sans-serif", marginRight:4 }}>Categorías:</span>
+                {categorias.map(cat => {
+                  const activo = filtrosCat.includes(cat.id);
+                  return (
+                    <label key={cat.id} style={{ display:"inline-flex", alignItems:"center",
+                      gap:6, cursor:"pointer", fontSize:12,
+                      color: activo ? C.bgHeader : C.textSub,
+                      fontFamily:"Arial,sans-serif",
+                      padding:"4px 10px", borderRadius:20,
+                      border:`1.5px solid ${activo ? C.bgHeader : C.border}`,
+                      background: activo ? C.bgHeader+"18" : "transparent",
+                      userSelect:"none" }}>
+                      <input type="checkbox" checked={activo}
+                        onChange={()=>toggleFiltroCat(cat.id)}
+                        style={{ width:13, height:13, accentColor:C.bgHeader, cursor:"pointer" }} />
+                      {cat.nombre}
+                    </label>
+                  );
+                })}
+                {filtrosCat.length > 0 && (
+                  <button onClick={()=>setFiltrosCat([])}
+                    style={{ fontSize:11, color:C.textMuted, background:"transparent",
+                      border:"none", cursor:"pointer", fontFamily:"Arial,sans-serif",
+                      textDecoration:"underline", padding:"2px 4px" }}>
+                    Limpiar filtros
+                  </button>
+                )}
+                <button onClick={()=>setShowGestCat(true)}
+                  style={{ marginLeft:"auto", fontSize:11, color:C.textSub,
+                    background:"transparent", border:`1px solid ${C.border}`,
+                    borderRadius:20, cursor:"pointer", fontFamily:"Arial,sans-serif",
+                    padding:"4px 12px" }}>
+                  ⚙ Gestionar categorías
+                </button>
+              </div>
+            )}
+
             <div style={{ display:"grid",
               gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:16 }}>
               {cultivosLibro.map(c=>{
                 const tareasC=tareas.filter(t=>t.cultivoId===c.id);
+                const atenuadoLibro = c._filtrado === true;
                 return (
                   <div key={c.id} style={{ background:C.bgCard,
                     border:`1px solid ${C.border}`,
                     borderLeft:`4px solid ${c.activo?C.accent:C.textMuted}`,
                     borderRadius:8, padding:20,
-                    opacity:c.activo?1:0.7,
-                    boxShadow:"0 2px 10px rgba(0,0,0,0.07)" }}>
+                    opacity: atenuadoLibro ? 0.3 : (c.activo?1:0.7),
+                    boxShadow:"0 2px 10px rgba(0,0,0,0.07)",
+                    transition:"opacity .2s" }}>
                     <div style={{ display:"flex", justifyContent:"space-between",
                       alignItems:"flex-start" }}>
                       <div>
@@ -1197,6 +1341,12 @@ export default function HuertaApp() {
               onChange={e=>setNewCult({...newCult,nombre:e.target.value})}
               style={inp} placeholder="Ej: Tomates, Arvejas..." />
           </Campo>
+          <Campo label="🏷  Categoría">
+            <select value={newCult.categoriaId||""} onChange={e=>setNewCult({...newCult,categoriaId:e.target.value})} style={sel}>
+              <option value="">— Sin especificar —</option>
+              {categorias.map(cat=><option key={cat.id} value={cat.id}>{cat.nombre}</option>)}
+            </select>
+          </Campo>
           <Campo label="Ubicación (opcional)">
             <input value={newCult.ubicacion}
               onChange={e=>setNewCult({...newCult,ubicacion:e.target.value})}
@@ -1254,6 +1404,12 @@ export default function HuertaApp() {
               onChange={e=>setEditCultivo({...editCultivo,nombre:e.target.value})}
               style={inp} />
           </Campo>
+          <Campo label="🏷  Categoría">
+            <select value={editCultivo.categoriaId||""} onChange={e=>setEditCultivo({...editCultivo,categoriaId:e.target.value})} style={sel}>
+              <option value="">— Sin especificar —</option>
+              {categorias.map(cat=><option key={cat.id} value={cat.id}>{cat.nombre}</option>)}
+            </select>
+          </Campo>
           <Campo label="Ubicación (opcional)">
             <input value={editCultivo.ubicacion||""}
               onChange={e=>setEditCultivo({...editCultivo,ubicacion:e.target.value})}
@@ -1310,6 +1466,63 @@ export default function HuertaApp() {
               <button onClick={()=>setEditCultivo(null)} style={btnCancel}>Cancelar</button>
               <button onClick={saveCultivo} style={btnPrimary}>Guardar</button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal gestión de categorías */}
+      {showGestCat&&(
+        <Modal title="🏷  Gestionar Categorías" onClose={()=>{ setShowGestCat(false); setEditCatId(null); setNewCatNombre(""); }}>
+          <div style={{ marginBottom:16 }}>
+            {categorias.map(cat=>(
+              <div key={cat.id} style={{ display:"flex", alignItems:"center", gap:8,
+                padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+                {editCatId===cat.id ? (
+                  <>
+                    <input value={editCatNombre}
+                      onChange={e=>setEditCatNombre(e.target.value)}
+                      onKeyDown={e=>{ if(e.key==="Enter") renombrarCategoria(cat.id,editCatNombre); if(e.key==="Escape") setEditCatId(null); }}
+                      style={{...inp, flex:1, marginBottom:0, padding:"6px 10px", fontSize:13}}
+                      autoFocus />
+                    <button onClick={()=>renombrarCategoria(cat.id,editCatNombre)} style={{...btnPrimary, padding:"6px 14px", fontSize:12}}>✓</button>
+                    <button onClick={()=>setEditCatId(null)} style={{...btnCancel, padding:"6px 10px", fontSize:12}}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ flex:1, fontSize:14, color:C.textMain, fontFamily:"Georgia,serif" }}>{cat.nombre}</span>
+                    <button onClick={()=>{ setEditCatId(cat.id); setEditCatNombre(cat.nombre); }}
+                      style={{ padding:"4px 10px", borderRadius:6, border:`1px solid ${C.border}`,
+                        background:"transparent", color:C.textSub, cursor:"pointer",
+                        fontSize:12, fontFamily:"Arial,sans-serif" }}>
+                      ✏ Renombrar
+                    </button>
+                    <button onClick={()=>eliminarCategoria(cat.id)}
+                      style={{ padding:"4px 10px", borderRadius:6, border:`1px solid #b91c1c33`,
+                        background:"transparent", color:"#b91c1c", cursor:"pointer",
+                        fontSize:12, fontFamily:"Arial,sans-serif" }}>
+                      🗑
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:8 }}>
+            <input value={newCatNombre}
+              onChange={e=>setNewCatNombre(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") addCategoria(newCatNombre); }}
+              style={{...inp, flex:1, marginBottom:0, fontSize:13}}
+              placeholder="Nueva categoría..." />
+            <button onClick={()=>addCategoria(newCatNombre)}
+              disabled={!newCatNombre.trim()}
+              style={{...btnPrimary, padding:"9px 16px",
+                opacity:newCatNombre.trim()?1:0.45,
+                cursor:newCatNombre.trim()?"pointer":"not-allowed"}}>
+              + Agregar
+            </button>
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:20 }}>
+            <button onClick={()=>{ setShowGestCat(false); setEditCatId(null); setNewCatNombre(""); }} style={btnPrimary}>Listo</button>
           </div>
         </Modal>
       )}
