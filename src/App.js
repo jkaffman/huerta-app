@@ -466,8 +466,6 @@ export default function HuertaApp() {
               })}
             </div>
 
-            </div>
-
             {/* Filtros por categoría */}
             {categorias.length > 0 && (
               <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap",
