@@ -289,7 +289,10 @@ export default function HuertaApp() {
   }
   function aplicarFiltroCat(arr) {
     if (filtrosCat.length === 0) return arr;
-    return arr.map(c => ({ ...c, _filtrado: !filtrosCat.includes(catIdDeCultivo(c)) }));
+    const conFlag = arr.map(c => ({ ...c, _filtrado: !filtrosCat.includes(catIdDeCultivo(c)) }));
+    const seleccionados = conFlag.filter(c => !c._filtrado).sort((a,b) => a.nombre.localeCompare(b.nombre));
+    const atenuados = conFlag.filter(c => c._filtrado).sort((a,b) => a.nombre.localeCompare(b.nombre));
+    return [...seleccionados, ...atenuados];
   }
 
   function sortCultivos(arr) {
