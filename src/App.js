@@ -139,16 +139,9 @@ export default function HuertaApp() {
       s.docs.forEach(d => { obj[d.id] = d.data().color; });
       setColoresCustom(obj);
     });
-    let categoriasInicializadas = false;
     const u5 = onSnapshot(collection(db,"categorias"), s => {
       const cats = s.docs.map(d => ({ id:d.id, ...d.data() }));
-      if (cats.length === 0 && !categoriasInicializadas) {
-        categoriasInicializadas = true;
-        const defaults = ["Hortaliza","Frutal","Flor","Nativo","Hierba","Otros"];
-        defaults.forEach((nombre,i) => addDoc(collection(db,"categorias"), { nombre, orden: i }));
-      } else {
-        setCategorias(cats.sort((a,b)=>(a.orden||0)-(b.orden||0)));
-      }
+      setCategorias(cats.sort((a,b)=>(a.orden||0)-(b.orden||0)));
     });
     // Migración: eliminar campo "año" de todos los cultivos existentes
     onSnapshot(collection(db,"cultivos"), snap => {
@@ -200,6 +193,9 @@ export default function HuertaApp() {
     if (newCult.texturaSuelo) datos.texturaSuelo = newCult.texturaSuelo;
     if (newCult.profundidadSuelo) datos.profundidadSuelo = newCult.profundidadSuelo;
     if (newCult.categoriaId) datos.categoriaId = newCult.categoriaId;
+    if (newCult.heladas) datos.heladas = newCult.heladas;
+    if (newCult.floracion) datos.floracion = newCult.floracion;
+    if (newCult.fructificacion) datos.fructificacion = newCult.fructificacion;
     await addDoc(collection(db,"cultivos"), datos);
     setNewCult({ nombre:"", ubicacion:"", activo:true, categoriaId:"" });
     setShowAddCultivo(false);
