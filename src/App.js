@@ -111,6 +111,7 @@ export default function HuertaApp() {
   const [editCatId, setEditCatId] = useState(null); // id de la categoría en edición inline
   const [editCatNombre, setEditCatNombre] = useState(""); // nombre editado
   const [newCatNombre, setNewCatNombre] = useState(""); // nombre nueva categoría
+  const [tareasCompletadas, setTareasCompletadas] = useState({}); // { tareaId: true }
   useEffect(()=>{
     const fn = ()=>setGanttScale(getGanttScale());
     window.addEventListener("resize", fn);
@@ -143,6 +144,11 @@ export default function HuertaApp() {
       const cats = s.docs.map(d => ({ id:d.id, ...d.data() }));
       setCategorias(cats.sort((a,b)=>(a.orden||0)-(b.orden||0)));
     });
+    const u6 = onSnapshot(collection(db,"tareasCompletadas"), s => {
+      const obj = {};
+      s.docs.forEach(d => { obj[d.id] = true; });
+      setTareasCompletadas(obj);
+    });
     // Migración: eliminar campo "año" de todos los cultivos existentes
     onSnapshot(collection(db,"cultivos"), snap => {
       snap.docs.forEach(d => {
@@ -151,10 +157,19 @@ export default function HuertaApp() {
         }
       });
     }, () => {}); // silencia errores de permisos
-    return () => { u1(); u2(); u3(); u4(); u5(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
   }, []);
 
   async function cambiarColor(tipoId, nuevoColor) {
+  async function toggleTareaCompletada(tareaId) {
+    const ref = doc(db,"tareasCompletadas",tareaId);
+    if (tareasCompletadas[tareaId]) {
+      await deleteDoc(ref);
+    } else {
+      await setDoc(ref, { completada: true });
+    }
+  }
+
     await setDoc(doc(db,"coloresCustom",tipoId), { color:nuevoColor });
   }
 
@@ -719,16 +734,14 @@ export default function HuertaApp() {
               const mesIdx = mesResumen;
               const mesKey = `${year}-${String(mesIdx+1).padStart(2,"0")}`;
               const tareasDelMes = tareas.filter(t=>t.fecha===mesKey);
-              // Agrupar por tipo
+              // Agrupar por tipo, guardando tarea individual con su id
               const porTipo = {};
               tareasDelMes.forEach(t=>{
                 const info = getTipoInfo(t.tipo,t.label,tareasCustom,coloresCustom);
                 const key = t.tipo;
-                if(!porTipo[key]) porTipo[key]={ info, label:t.label||info.label, cultivos:[] };
+                if(!porTipo[key]) porTipo[key]={ info, label:t.label||info.label, items:[] };
                 const cult = cultivos.find(c=>c.id===t.cultivoId);
-                if(cult && !porTipo[key].cultivos.includes(cult.nombre)) {
-                  porTipo[key].cultivos.push(cult.nombre);
-                }
+                if(cult) porTipo[key].items.push({ tareaId:t.id, nombre:cult.nombre });
               });
               const grupos = Object.values(porTipo);
               return (
@@ -737,10 +750,11 @@ export default function HuertaApp() {
                     onClick={()=>setMesResumen(null)}/>
                   <div style={{ position:"fixed", top:"50%", left:"50%",
                     transform:"translate(-50%,-50%)",
-                    zIndex:401, width:"min(420px, 88vw)",
+                    zIndex:401, width:"min(440px, 92vw)",
                     background:C.bgCard, border:`2px solid ${C.borderDark}`,
                     borderRadius:12, padding:22,
-                    boxShadow:"0 8px 40px rgba(0,0,0,0.28)" }}>
+                    boxShadow:"0 8px 40px rgba(0,0,0,0.28)",
+                    maxHeight:"80vh", overflowY:"auto" }}>
                     <div style={{ display:"flex", justifyContent:"space-between",
                       alignItems:"center", marginBottom:14 }}>
                       <div style={{ fontSize:18, fontWeight:"bold",
@@ -757,19 +771,37 @@ export default function HuertaApp() {
                           Sin tareas registradas en este mes.
                         </div>
                       : grupos.map((g,gi)=>(
-                          <div key={gi} style={{ display:"flex", alignItems:"flex-start",
-                            gap:10, marginBottom:10 }}>
-                            <div style={{ width:10, height:10, borderRadius:"50%",
-                              background:g.info.color, flexShrink:0, marginTop:3 }}/>
-                            <div style={{ flex:1 }}>
+                          <div key={gi} style={{ marginBottom:12 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8,
+                              marginBottom:6 }}>
+                              <div style={{ width:10, height:10, borderRadius:"50%",
+                                background:g.info.color, flexShrink:0 }}/>
                               <span style={{ fontSize:13, fontWeight:"bold",
                                 color:g.info.color, fontFamily:"Georgia,serif" }}>
                                 {g.label}
                               </span>
-                              <span style={{ fontSize:12, color:C.textSub,
-                                fontFamily:"Arial,sans-serif", marginLeft:6 }}>
-                                {g.cultivos.join(", ")}
-                              </span>
+                            </div>
+                            <div style={{ paddingLeft:18, display:"flex",
+                              flexWrap:"wrap", gap:"4px 12px" }}>
+                              {g.items.map(item=>{
+                                const hecho = !!tareasCompletadas[item.tareaId];
+                                return (
+                                  <label key={item.tareaId} style={{
+                                    display:"inline-flex", alignItems:"center",
+                                    gap:5, cursor:"pointer",
+                                    fontSize:12, fontFamily:"Arial,sans-serif",
+                                    color: hecho ? C.textMuted : C.textSub,
+                                    textDecoration: hecho ? "line-through" : "none",
+                                    padding:"3px 0" }}>
+                                    <input type="checkbox" checked={hecho}
+                                      onChange={()=>toggleTareaCompletada(item.tareaId)}
+                                      style={{ width:13, height:13,
+                                        accentColor:g.info.color, cursor:"pointer",
+                                        flexShrink:0 }} />
+                                    {item.nombre}
+                                  </label>
+                                );
+                              })}
                             </div>
                           </div>
                         ))
