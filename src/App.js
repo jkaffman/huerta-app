@@ -160,7 +160,6 @@ export default function HuertaApp() {
     return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
   }, []);
 
-  async function cambiarColor(tipoId, nuevoColor) {
   async function toggleTareaCompletada(tareaId) {
     const ref = doc(db,"tareasCompletadas",tareaId);
     if (tareasCompletadas[tareaId]) {
@@ -170,6 +169,7 @@ export default function HuertaApp() {
     }
   }
 
+  async function cambiarColor(tipoId, nuevoColor) {
     await setDoc(doc(db,"coloresCustom",tipoId), { color:nuevoColor });
   }
 
